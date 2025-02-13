@@ -1,0 +1,139 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String     @id @default(cuid())
+  email          String     @unique
+  phone          String?
+  firstName      String?    @map("first_name")
+  lastName       String?    @map("last_name")
+  middleName     String?    @map("middle_name")
+  username       String     @unique
+  hashedPassword String     @map("hashed_password")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+  roles          UserRole[]
+  isActive       Boolean    @default(true) @map("is_active")
+}
+
+model Role {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  users       UserRole[]
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  roleId    String   @map("role_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id])
+  role        Role         @relation(fields: [roleId], references: [id])
+  seller      AssetSeller?
+  billToParty BillToParty?
+  buyer       AssetBuyer?
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model AssetSeller {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  address      String
+  contact      UserRole @relation(fields: [contactId], references: [id])
+  contactId    String   @unique @map("contact_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  assets       Asset[]
+  liqwikRating Int?     @map("liqwik_rating")
+
+  @@map("asset_sellers")
+}
+
+model BillToParty {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  address      String
+  contact      UserRole @relation(fields: [contactId], references: [id])
+  contactId    String   @unique @map("contact_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  assets       Asset[]
+  liqwikRating Int?     @map("liqwik_rating")
+
+  @@map("bill_to_parties")
+}
+
+model AssetBuyer {
+  id           String     @id @default(cuid())
+  name         String     @unique
+  address      String
+  contact      UserRole   @relation(fields: [contactId], references: [id])
+  contactId    String     @unique @map("contact_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  bids         AssetBid[]
+  liqwikRating Int?       @map("liqwik_rating")
+
+  @@map("asset_buyers")
+}
+
+model Asset {
+  id               String      @id @default(cuid())
+  notes            String?
+  seller           AssetSeller @relation(fields: [sellerId], references: [id])
+  sellerId         String      @map("seller_id")
+  billToParty      BillToParty @relation(fields: [billToPartyId], references: [id])
+  billToPartyId    String      @map("bill_to_party_id")
+  invoiceNumber    String      @map("invoice_number")
+  invoiceImage     String?     @map("invoice_image")
+  invoiceDate      DateTime    @map("invoice_date")
+  faceValueInCents Int         @map("face_value_in_cents")
+  paymentDate      DateTime    @map("payment_date")
+  // auctionedUnits   Int         @map("auctioned_units")
+  // bidClosingDate   DateTime    @map("bid_closing_date")
+  auctionStatus    String      @default("DRAFT") @map("auction_status")
+  proposedDiscount Int?        @map("proposed_discount")
+  bids             AssetBid[]
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+  termMonths       Int?        @map("term_months")
+  apy              Float?      @map("apy")
+
+  @@unique([sellerId, billToPartyId, invoiceNumber])
+  @@map("assets")
+}
+
+model AssetBid {
+  id           String     @id @default(cuid())
+  asset        Asset      @relation(fields: [assetId], references: [id])
+  assetId      String     @map("asset_id")
+  buyer        AssetBuyer @relation(fields: [buyerId], references: [id])
+  buyerId      String     @map("buyer_id")
+  numUnits     Int        @map("num_units")
+  centsPerUnit Int        @map("cents_per_unit")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  accepted     Boolean    @default(false)
+  acceptedAt   DateTime?  @map("accepted_at")
+
+  @@map("asset_bids")
+}

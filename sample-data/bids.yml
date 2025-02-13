@@ -1,0 +1,21 @@
+- asset: asset1
+  buyer: orgB1
+  id: bidS1
+  numUnits: 8
+  centsPerUnit: 98000
+- asset: asset1
+  buyer: orgB2
+  id: bidS2
+  numUnits: 6
+  centsPerUnit: 95000
+
+- asset: asset2
+  buyer: orgB1
+  id: bidS3
+  numUnits: 6
+  centsPerUnit: 97500
+- asset: asset2
+  buyer: orgB2
+  id: bidS4
+  numUnits: 4
+  centsPerUnit: 96000  

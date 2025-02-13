@@ -1,0 +1,45 @@
+- username: admin
+  id: admin1
+  firstName: Admin
+  lastName: User
+  roles:
+    - admin
+
+- username: s1
+  id: seller1
+  firstName: Seller
+  lastName: One
+  roles:
+    - seller
+- username: s2
+  id: seller2
+  firstName: Seller
+  lastName: Two
+  roles:
+    - seller
+
+- username: bt1
+  id: billToParty1
+  firstName: Bill
+  lastName: PartyOne
+  roles:
+    - billToParty     
+- username: bt2
+  id: billToParty2
+  firstName: Bill
+  lastName: PartyTwo
+  roles:
+    - billToParty     
+
+- username: b1
+  id: buyer1
+  firstName: Buyer
+  lastName: One
+  roles:
+    - buyer
+- username: b2
+  id: buyer2
+  firstName: Buyer
+  lastName: Two
+  roles:
+    - buyer

@@ -1,0 +1,28 @@
+- seller: orgS1
+  id: asset1
+  billToParty: orgBT1
+  invoiceNumber: BT1-0001
+  faceValueInCents: 1050000
+  termMonths: 4
+  # termInDays: 120 
+  # auctionedUnits: 10
+  auctionStatus: BIDDING_OPEN
+- seller: orgS1
+  id: asset2
+  billToParty: orgBT1
+  invoiceNumber: BT1-0002
+  faceValueInCents: 1500000
+  termMonths: 7
+  # termInDays: 90 
+  # auctionedUnits: 15
+  auctionStatus: BIDDING_OPEN
+
+- seller: orgS2
+  id: asset3
+  billToParty: orgBT2
+  invoiceNumber: BT2-0001
+  faceValueInCents: 650000
+  termMonths: 10
+  # termInDays: 60 
+  # auctionedUnits: 6
+  auctionStatus: LIVE 

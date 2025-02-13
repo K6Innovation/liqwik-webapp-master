@@ -1,0 +1,32 @@
+- name: Asset Seller One Corp
+  type: seller
+  id: orgS1
+  address: 123 Main St, Anytown, USA
+  contact: s1
+- name: Asset Seller Two Inc
+  type: seller
+  id: orgS2
+  address: 45 Almond St, Anytown, USA
+  contact: s2
+
+- name: Bill One Corp
+  type: billToParty
+  id: orgBT1
+  address: 789 Oak St, Anytown, USA
+  contact: bt1
+- name: Bill Two Corp
+  type: billToParty
+  id: orgBT2
+  address: 1011 Maple St, Anytown, USA
+  contact: bt2
+
+- name: Asset Buyer One Corp
+  type: buyer
+  id: orgB1
+  address: 456 Elm St, Anytown, USA
+  contact: b1
+- name: Asset Buyer Two Corp
+  type: buyer
+  id: orgB2
+  address: 789 Pine St, Anytown, USA
+  contact: b2

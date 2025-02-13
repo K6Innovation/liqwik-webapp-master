@@ -1,0 +1,8 @@
+- name: admin
+  id: adminRole
+- name: seller
+  id: sellerRole
+- name: buyer
+  id: buyerRole
+- name: billToParty
+  id: billToPartyRole
