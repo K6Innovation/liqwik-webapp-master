@@ -5,7 +5,7 @@ type Props = { color: string };
 export default function Loading({ color }: Props) {
   return (
     <img
-      src="/liqwik-icon.jpeg"
+      src="/liqwik-icon-v1.png" 
       alt="Loading..."
       className="w-14 h-11"
       width="20"

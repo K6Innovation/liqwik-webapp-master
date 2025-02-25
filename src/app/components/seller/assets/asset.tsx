@@ -44,22 +44,18 @@ function Field({ label, value }: { label: string; value: string }) {
 export default function Asset({ asset, bidAction, editUrl }: Props) {
   return (
     <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex gap-2 items-center">
-          <h1 className="text-2xl font-bold">Asset</h1>
-          <Link href={editUrl}>
-            <EditButton className="btn-sm btn-ghost" />
-          </Link>
-        </div>
-        <Link href="/">
-          <CloseButton className="btn-sm btn-ghost" />
-        </Link>
-      </div>
+       <div className="w-100 bg-white shadow-lg border border-gray-200 rounded-2xl p-6 mt-11 space-y-4">
+            <h2 className=" text-base font-semibold text-gray-800">Token Info</h2>
+            <img 
+              src="/liqwik-token.png" 
+              alt="Card Image" 
+              className="w-32 h-32 object-cover mx-auto rounded-lg"
+            /></div>
       <div>
-        <div className="mb-4">
+        <div className="grid grid-cols-2 gap-4 mb-4 mt-5">
           <Field label="Bill-To Party" value={asset.billToParty.name} />
+          <Field label="Term Months" value={asset.termMonths ? `${asset.termMonths} months` : "-"} />
         </div>
-
         <div className="grid grid-cols-2 gap-4 mb-2">
           <Field label="Invoice Number" value={asset.invoiceNumber} />
           <Field
@@ -92,71 +88,32 @@ export default function Asset({ asset, bidAction, editUrl }: Props) {
             </div>
           </div>
         </div>
-
-        <div className="grid gap-1 mb-4">
-          <button type="button" className="btn btn-primary w-full btn-outline">
-            View Invoice
-          </button>
-        </div>
-
-        <div className="grid gap-1 mb-4">
-          <button type="button" className="btn btn-primary w-full btn-outline">
-            View Bank Statememt
-          </button>
-        </div>
-
-        <div className="grid gap-1 mb-4">
-          <button type="button" className="btn btn-primary w-full btn-outline">
-            View Bill to Party History
-          </button>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4 mb-2">
-          <Field
-            label="Suggested Disc"
-            value={asset.proposedDiscount ? `${asset.proposedDiscount}%` : "-"}
-          />
-          <div>
-            <label className="block label-text text-gray-400 mb-1">
-              Term Months
-            </label>
-            <div className="flex items-center">
-              <div className="font-bold text-gray-800">
-                {asset.termMonths || "-"}{" "}
-                {asset.termMonths && (
-                  <span className="font-normal">months</span>
-                )}
-              </div>
-            </div>
-          </div>
-          <Field label="APY" value={asset.apy ? `${asset.apy}%` : "-"} />
-        </div>
+      
+      <div className="w-full">
+      <table className="w-full">
+        <tbody><BidList asset={asset} bids={asset.bids} bidAction={bidAction} />
+        </tbody>
+      </table>
+    </div>
       </div>
 
-      <div className="flex flex-col gap-4 mb-4">
+      {/* <div className="flex flex-col gap-4 mb-4">
         <BidList asset={asset} bids={asset.bids} bidAction={bidAction} />
-      </div>
-      <div className="flex flex-col gap-4 mb-4">
+      </div> */}
+      <div className="flex flex-col gap-4 mb-4 mt-5">
         <div>
           <Link href={`/`}>
-            <button type="button" className="btn btn-info w-full">
-              Close Auction
+            <button type="button" className="w-full bg-pink-700 text-white py-2 px-4 rounded-full">
+              Accept
             </button>
           </Link>
         </div>
-        <div>
-          <Link href={`/`}>
-            <button type="button" className="btn btn-error w-full">
-              Withdraw Auction
-            </button>
-          </Link>
-        </div>
-        <div>
-          <Link href={`/`}>
+        <div className="mb-10">
+          {/* <Link href={`/`}>
             <button type="button" className="btn w-full">
               Go Back
             </button>
-          </Link>
+          </Link> */}
         </div>
       </div>
     </div>

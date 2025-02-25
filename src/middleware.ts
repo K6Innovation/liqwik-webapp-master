@@ -8,7 +8,7 @@ export default withAuth(
     const role = token?.roles[0];
 
     let path = req.nextUrl.pathname;
-    if (["/liqwik-icon.jpeg" , "/liqwik-icon.png", "/assets_bar_chart.png"].includes(path)) {
+    if (["/liqwik-icon.jpeg" , "/liqwik-icon-v1.png", "/assets_bar_chart.png","/liqwik-token.png"].includes(path)) {
       return NextResponse.next();
     }
     const re = new RegExp(`^/${role}s/${token.id}`);

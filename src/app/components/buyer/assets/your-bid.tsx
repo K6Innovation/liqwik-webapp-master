@@ -48,8 +48,38 @@ export default function YourBid({ asset, bid, postBidAction }: Props) {
           <div>
             <h1 className="text-lg italic text-gray-500">Your Bid</h1>
           </div>
-
-          <div className="flex items-center justify-between">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-100 text-gray-700">
+                <th className="border border-gray-300 px-4 py-2">Name</th>
+                <th className="border border-gray-300 px-4 py-2">Amount</th>
+                <th className="border border-gray-300 px-4 py-2">Disc</th>
+                <th className="border border-gray-300 px-4 py-2">APY</th>
+                <th className="border border-gray-300 px-4 py-2">Edit</th>
+              </tr>
+            </thead>
+          <tr className="border-t bg-white shadow-lg border border-gray-200">
+      <td className="py-3 px-4 text-left text-gray-600 align-top border-r border-gray-300">
+        <span className="block whitespace-normal">{bid.buyer?.name}</span>
+      </td>
+      <td className="py-3 px-4 font-semibold text-center align-top border-r border-gray-300">
+        €{bidAmount}
+      </td>
+      <td className="py-3 px-4 text-gray-600 italic text-center align-top border-r border-gray-300">
+        {discount}%
+      </td>
+      <td className="py-3 px-4 text-gray-600 italic text-center align-top border-r border-gray-300">
+        {apy}%
+      </td>
+      <td className="py-3 px-4 text-center align-top">
+      <EditButton
+                className={`btn-sm btn-ghost `}
+                onClick={() => setShowBidForm(true)}
+              />
+      </td>
+    </tr>
+    </table>
+          {/* <div className="flex items-center justify-between">
             <div className="flex items-center py-2">
               <div className="flex-grow">
                 <div className="font-semibold">
@@ -68,7 +98,7 @@ export default function YourBid({ asset, bid, postBidAction }: Props) {
                 onClick={() => setShowBidForm(true)}
               />
             </div>
-          </div>
+          </div> */}
         </div>
       )}
     </>

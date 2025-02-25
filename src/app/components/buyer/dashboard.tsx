@@ -7,7 +7,7 @@ type Props = {
 
 export default function BuyerDashboard({ assets = [] }: Props) {
   return (
-    <div className="max-w-md mx-auto p-4 bg-white rounded-lg shadow-md">
+    <div className="max-w-md mx-auto p-4 bg-white rounded-lg shadow-md mt-11">
       <div className="max-w-md mx-auto p-4 bg-white rounded-lg">
         <img
           src="/assets_bar_chart.png"

@@ -169,14 +169,14 @@ export default function Asset({ asset, bidAction }: Props) {
       <div className="flex flex-col gap-4 mb-4">
         <div>
           <Link href={`/`}>
-            <button type="button" className="btn btn-info w-full">
+            <button type="button" className="w-full bg-pink-400 text-white py-2 px-4 rounded-full">
               Close Auction
             </button>
           </Link>
         </div>
         <div>
           <Link href={`/`}>
-            <button type="button" className="btn btn-error w-full">
+            <button type="button" className="w-full bg-pink-700 text-white py-2 px-4 rounded-full">
               Withdraw Auction
             </button>
           </Link>

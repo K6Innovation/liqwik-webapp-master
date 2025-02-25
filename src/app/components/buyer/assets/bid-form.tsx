@@ -45,7 +45,7 @@ type Props = {
 };
 
 const inputH = "h-[2.5rem] min-h-[2.5rem]";
-const errorBorder = "border-red-400";
+const errorBorder = "border-pink-700";
 const fields = [
   {
     name: "totalAmount",
@@ -204,11 +204,11 @@ export default function BidForm({
               </label>
             </div>
 
-            <div className="flex flex-col gap-4 mb-4">
+            <div className="flex flex-col text-center gap-4 mb-10">
               <div>
                 <button
                   type="submit"
-                  className="btn w-full btn-info "
+                  className=" bg-pink-700 text-white w-40 py-2 px-4 rounded-full "
                   disabled={isLoading || errorFields.length > 0}
                 >
                   Save Bid

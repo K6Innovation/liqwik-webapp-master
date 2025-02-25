@@ -19,7 +19,7 @@ export default function AssetList({ assets = [] }: Props) {
   }, [assets]);
 
   return (
-    <div className="max-w-md mx-auto p-4 bg-white rounded-lg shadow-md">
+    <div className="max-w-md mx-auto p-4 bg-white rounded-lg shadow-md mb-10">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-center text-2xl font-bold">Assets</h1>
         <SearchButton
@@ -123,7 +123,7 @@ export default function AssetList({ assets = [] }: Props) {
             </label>
           </div>
           <div className="flex  gap-4 mb-4">
-            <button className="btn  btn-primary btn-sm">Apply</button>
+            <button className="btn bg-pink-700 text-white btn-sm">Apply</button>
             <button
               className="btn  btn-default btn-sm"
               onClick={() => setShowFilters(false)}

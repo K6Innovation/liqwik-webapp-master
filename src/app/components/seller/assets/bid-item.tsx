@@ -24,28 +24,40 @@ export default function BidItem({ asset, bid = {}, bidAction }: Props) {
   }, [asset, bid]);
 
   return (
-    <li className="flex items-center justify-between border-b last:border-b-0">
-      <div className="flex items-center py-2">
-        <div className="flex-grow">
-          <div className="font-semibold">
-            €{bidAmount}
-            <span className="text-gray-600 font-normal italic">
-              {" "}
-              @ {discount}% discount (APY: {apy}%)
-            </span>
-          </div>
-          <div className="text-sm text-gray-600">{bid.buyer.name}</div>
-        </div>
-      </div>
-      <div className="text-gray-400">
-        <AcceptButton
-          className={`btn-sm btn-ghost ${bid.accepted ? "text-success" : ""}`}
-          iconStyle={bid.accepted ? "solid" : "outline"}
-          onClick={() =>
-            bidAction(bid.id, bid.accepted ? "cancel-accept" : "accept")
-          }
-        />
-      </div>
-    </li>
+    <tr className="border-t bg-white shadow-lg border border-gray-200">
+  <td className="py-3 px-4 text-left text-gray-600 align-top border-r border-gray-300">
+    <span className="block whitespace-normal">{bid.buyer.name}</span>
+  </td>
+  <td className="py-3 px-4 font-semibold text-center align-top border-r border-gray-300">
+    €{bidAmount}
+  </td>
+  <td className="py-3 px-4 text-gray-600 italic text-center align-top border-r border-gray-300">
+    {discount}%
+  </td>
+  <td className="py-3 px-4 text-gray-600 italic text-center align-top border-r border-gray-300">
+    {apy}%
+  </td>
+  <td className="py-3 px-4 text-center align-top">
+    <AcceptButton
+      className={`btn-sm btn-ghost ${bid.accepted ? "text-success" : ""}`}
+      iconStyle={bid.accepted ? "solid" : "outline"}
+      onClick={() => bidAction(bid.id, bid.accepted ? "cancel-accept" : "accept")}
+    />
+  </td>
+</tr>
+
+    // <tr className="border-t w-full bg-white shadow-lg border border-gray-200 rounded-2xl p-6">
+    //   <td className="py-2 text-sm text-gray-600">{bid.buyer.name}</td>
+    //   <td className="py-2 font-semibold">€{bidAmount}</td>
+    //   <td className="py-2 text-gray-600 italic">{discount}%</td>
+    //   <td className="py-2 text-gray-600 italic">{apy}%</td>
+    //   <td className="py-2 text-gray-400">
+    //     <AcceptButton
+    //       className={`btn-sm btn-ghost ${bid.accepted ? "text-success" : ""}`}
+    //       iconStyle={bid.accepted ? "solid" : "outline"}
+    //       onClick={() => bidAction(bid.id, bid.accepted ? "cancel-accept" : "accept")}
+    //     />
+    //   </td>
+    // </tr>
   );
 }

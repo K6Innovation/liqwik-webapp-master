@@ -35,7 +35,7 @@ type Props = {
 };
 
 const inputH = "h-[2.5rem] min-h-[2.5rem]";
-const errorBorder = "border-red-400";
+const errorBorder = "border-pink-700";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -78,16 +78,15 @@ export default function Asset({ asset, bidAction, editUrl }: Props) {
 
   return (
     <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex gap-2 items-center">
-          <h1 className="text-2xl font-bold">Asset</h1>
-        </div>
-        <Link href="/">
-          <CloseButton className="btn-sm btn-ghost" />
-        </Link>
-      </div>
+      <div className="w-100 bg-white shadow-lg border border-gray-200 rounded-2xl p-6 mt-11 space-y-4">
+            <h2 className=" text-base font-semibold text-gray-800">Token Info</h2>
+            <img 
+              src="/liqwik-token.png" 
+              alt="Card Image" 
+              className="w-32 h-32 object-cover mx-auto rounded-lg"
+            /></div>
       <div>
-        <div className="mb-4">
+        <div className="mb-4 mt-10">
           <Field label="Bill-To Party" value={asset.billToParty.name} />
         </div>
 
@@ -138,14 +137,14 @@ export default function Asset({ asset, bidAction, editUrl }: Props) {
         />
       </div>
 
-      <div className="flex flex-col gap-4 mb-4">
-        <div>
+      <div className="flex flex-col gap-4 mb-10">
+        {/* <div>
           <Link href={`/`}>
             <button type="button" className="btn w-full">
               Go Back
             </button>
           </Link>
-        </div>
+        </div> */}
       </div>
     </div>
   );

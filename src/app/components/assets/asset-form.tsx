@@ -37,7 +37,7 @@ type Props = {
 };
 
 const inputH = "h-[2.5rem] min-h-[2.5rem]";
-const errorBorder = "border-red-400";
+const errorBorder = "border-pink-700";
 const fields = [
   {
     name: "invoiceNumber",
@@ -205,7 +205,7 @@ export default function AssetForm({ asset, postSaveAction }: Props) {
       <form onSubmit={onSubmit} ref={formRef}>
         <div className="mb-4">
           <label className="form-control w-full">
-            <div className="label-text text-gray-400 mb-1">
+            <div className="label-text text-gray-400 mt-4 mb-1">
               Bill-To Party
               <Required />
             </div>
@@ -391,22 +391,31 @@ export default function AssetForm({ asset, postSaveAction }: Props) {
           </div>{" "}
         </div>
         <div className="flex flex-col gap-4 mb-4">
-          <div>
+          <div className="w-100 bg-white shadow-lg border border-gray-200 rounded-2xl p-6 space-y-4">
+          <h2 className=" text-base font-semibold text-gray-800">Token Info</h2>
+            <img 
+              src="/liqwik-token.png" 
+              alt="Card Image" 
+              className="w-32 h-32 object-cover mx-auto rounded-lg"
+            />
+            <div className="flex justify-end">
             <button
               type="submit"
-              className="btn w-full btn-info "
+              className=" bg-pink-700 text-white py-2 px-4 rounded-lg shadow-md hover:bg-pink-700 transition"
               // disabled={isLoading || errorFields.length > 0}
             >
               Validate
             </button>
+              
+            </div>
           </div>
           <div>
             <button
               type="submit"
-              className="btn w-full btn-primary "
+              className="w-full bg-pink-600 text-white py-2 px-4 rounded-full"
               // disabled={isLoading || errorFields.length > 0}
             >
-              Create Liqwik Token
+              Create Token
             </button>
             {saveStatus && (
               <div className={`text-sm mt-1 italic text-${saveStatus.status}`}>
@@ -414,12 +423,12 @@ export default function AssetForm({ asset, postSaveAction }: Props) {
               </div>
             )}
           </div>
-          <div>
-            <Link href={!asset.id ? "/" : `/assets/${asset.id}`}>
+          <div className="mb-10">
+            {/* <Link href={!asset.id ? "/" : `/assets/${asset.id}`}>
               <button type="button" className="btn w-full">
                 Go Back
               </button>
-            </Link>
+            </Link> */}
           </div>
         </div>
       </form>
