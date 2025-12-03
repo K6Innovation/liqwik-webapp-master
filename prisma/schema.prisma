@@ -1,8 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// prisma/schema.prisma
 
 generator client {
   provider = "prisma-client-js"
@@ -14,18 +10,32 @@ datasource db {
 }
 
 model User {
-  id             String     @id @default(cuid())
-  email          String     @unique
-  phone          String?
-  firstName      String?    @map("first_name")
-  lastName       String?    @map("last_name")
-  middleName     String?    @map("middle_name")
-  username       String     @unique
-  hashedPassword String     @map("hashed_password")
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
-  roles          UserRole[]
-  isActive       Boolean    @default(true) @map("is_active")
+  id                        String              @id @default(cuid())
+  email                     String              @unique
+  phone                     String?
+  firstName                 String?             @map("first_name")
+  lastName                  String?             @map("last_name")
+  middleName                String?             @map("middle_name")
+  username                  String              @unique
+  hashedPassword            String              @map("hashed_password")
+  createdAt                 DateTime            @default(now()) @map("created_at")
+  updatedAt                 DateTime            @updatedAt @map("updated_at")
+  roles                     UserRole[]
+  isActive                  Boolean             @default(true) @map("is_active")
+  isEmailVerified           Boolean             @default(false) @map("is_email_verified")
+  emailVerifiedAt           DateTime?           @map("email_verified_at")
+  verificationCode          String?             @map("verification_code")
+  verificationCodeExpireDate DateTime?          @map("verification_code_expire_date")
+  
+  loginOtpCode              String?             @map("login_otp_code")
+  loginOtpCodeExpireDate    DateTime?           @map("login_otp_code_expire_date")
+  isFirstLogin              Boolean             @default(true) @map("is_first_login")
+  
+  currentRoleId             String?             @map("current_role_id")
+
+  notifications             Notification[]
+
+  @@map("users")
 }
 
 model Role {
@@ -35,6 +45,8 @@ model Role {
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
   users       UserRole[]
+
+  @@map("roles")
 }
 
 model UserRole {
@@ -43,9 +55,15 @@ model UserRole {
   roleId    String   @map("role_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Add role-specific verification fields
+  isRoleVerified           Boolean   @default(false) @map("is_role_verified")
+  roleVerifiedAt           DateTime? @map("role_verified_at")
+  roleVerificationCode     String?   @map("role_verification_code")
+  roleVerificationExpireDate DateTime? @map("role_verification_expire_date")
 
-  user        User         @relation(fields: [userId], references: [id])
-  role        Role         @relation(fields: [roleId], references: [id])
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
   seller      AssetSeller?
   billToParty BillToParty?
   buyer       AssetBuyer?
@@ -58,12 +76,28 @@ model AssetSeller {
   id           String   @id @default(cuid())
   name         String   @unique
   address      String
-  contact      UserRole @relation(fields: [contactId], references: [id])
+  contact      UserRole @relation(fields: [contactId], references: [id], onDelete: Cascade)
   contactId    String   @unique @map("contact_id")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   assets       Asset[]
   liqwikRating Int?     @map("liqwik_rating")
+  
+  legalBusinessName              String?  @map("legal_business_name")
+  registrationNumber             String?  @map("registration_number")
+  taxIdentificationNumber        String?  @map("tax_identification_number")
+  businessType                   String?  @map("business_type")
+  industrySector                 String?  @map("industry_sector")
+  dateOfIncorporation            DateTime? @map("date_of_incorporation")
+  businessBankAccountDetails     String?  @map("business_bank_account_details")
+  authorizedSignatoryDetails     String?  @map("authorized_signatory_details")
+  countryOfIncorporation         String?  @map("country_of_incorporation")
+  registeredBusinessAddress      String?  @map("registered_business_address")
+  operatingAddress               String?  @map("operating_address")
+  websiteUrl                     String?  @map("website_url")
+  listOfDirectors                String?  @map("list_of_directors")
+  ultimateBeneficialOwners       String?  @map("ultimate_beneficial_owners")
+  shareholdingStructure          String?  @map("shareholding_structure")
 
   @@map("asset_sellers")
 }
@@ -72,7 +106,8 @@ model BillToParty {
   id           String   @id @default(cuid())
   name         String   @unique
   address      String
-  contact      UserRole @relation(fields: [contactId], references: [id])
+  email        String   @map("email")
+  contact      UserRole @relation(fields: [contactId], references: [id], onDelete: Cascade)
   contactId    String   @unique @map("contact_id")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -86,12 +121,24 @@ model AssetBuyer {
   id           String     @id @default(cuid())
   name         String     @unique
   address      String
-  contact      UserRole   @relation(fields: [contactId], references: [id])
+  contact      UserRole   @relation(fields: [contactId], references: [id], onDelete: Cascade)
   contactId    String     @unique @map("contact_id")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
   bids         AssetBid[]
   liqwikRating Int?       @map("liqwik_rating")
+
+  companyName                 String?    @map("company_name")
+  businessType                String?    @map("business_type")
+  industrySector              String?    @map("industry_sector")
+  businessRegistrationNumber String?    @map("business_registration_number")
+  taxIdentificationNumber     String?    @map("tax_identification_number")
+  billingAddress              String?    @map("billing_address")
+  shippingAddress             String?    @map("shipping_address")
+  companyWebsite              String?    @map("company_website")
+  preferredPaymentMethod      String?    @map("preferred_payment_method")
+  bankDetails                 String?    @map("bank_details")
+  purchaseOrderNumber         String?    @map("purchase_order_number")
 
   @@map("asset_buyers")
 }
@@ -99,34 +146,50 @@ model AssetBuyer {
 model Asset {
   id               String      @id @default(cuid())
   notes            String?
-  seller           AssetSeller @relation(fields: [sellerId], references: [id])
+  seller           AssetSeller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   sellerId         String      @map("seller_id")
-  billToParty      BillToParty @relation(fields: [billToPartyId], references: [id])
+  billToParty      BillToParty @relation(fields: [billToPartyId], references: [id], onDelete: Cascade)
   billToPartyId    String      @map("bill_to_party_id")
   invoiceNumber    String      @map("invoice_number")
   invoiceImage     String?     @map("invoice_image")
   invoiceDate      DateTime    @map("invoice_date")
   faceValueInCents Int         @map("face_value_in_cents")
   paymentDate      DateTime    @map("payment_date")
-  // auctionedUnits   Int         @map("auctioned_units")
-  // bidClosingDate   DateTime    @map("bid_closing_date")
   auctionStatus    String      @default("DRAFT") @map("auction_status")
   proposedDiscount Int?        @map("proposed_discount")
+  feesInCents      Int?        @map("fees_in_cents")
   bids             AssetBid[]
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
   termMonths       Int?        @map("term_months")
   apy              Float?      @map("apy")
-
+  
+  invoiceFilePath          String?     @map("invoice_file_path")
+  bankStatementFilePath    String?     @map("bank_statement_file_path")
+  billToPartyHistoryFilePath String?   @map("bill_to_party_history_file_path")
+  
+  feeApprovedBySeller      Boolean     @default(false) @map("fee_approved_by_seller")
+  feeApprovedAt            DateTime?   @map("fee_approved_at")
+  
+  billToPartyValidationToken    String?     @map("bill_to_party_validation_token") @unique
+  validatedByBillToParty        Boolean     @default(false) @map("validated_by_bill_to_party")
+  billToPartyValidatedAt        DateTime?   @map("bill_to_party_validated_at")
+  billToPartyValidationEmailSent Boolean    @default(false) @map("bill_to_party_validation_email_sent")
+  
+  isPosted                 Boolean     @default(false) @map("is_posted")
+  postedAt                 DateTime?   @map("posted_at")
+  isCancelled              Boolean     @default(false) @map("is_cancelled")
+  cancelledAt              DateTime?   @map("cancelled_at")
+  
   @@unique([sellerId, billToPartyId, invoiceNumber])
   @@map("assets")
 }
 
 model AssetBid {
   id           String     @id @default(cuid())
-  asset        Asset      @relation(fields: [assetId], references: [id])
+  asset        Asset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
   assetId      String     @map("asset_id")
-  buyer        AssetBuyer @relation(fields: [buyerId], references: [id])
+  buyer        AssetBuyer @relation(fields: [buyerId], references: [id], onDelete: Cascade)
   buyerId      String     @map("buyer_id")
   numUnits     Int        @map("num_units")
   centsPerUnit Int        @map("cents_per_unit")
@@ -134,6 +197,48 @@ model AssetBid {
   updatedAt    DateTime   @updatedAt @map("updated_at")
   accepted     Boolean    @default(false)
   acceptedAt   DateTime?  @map("accepted_at")
+  paymentDeadline DateTime?  @map("payment_deadline")
+  
+  paymentApprovalToken           String?    @map("payment_approval_token") @unique
+  paymentApprovedByBuyer         Boolean    @default(false) @map("payment_approved_by_buyer")
+  paymentApprovedAt              DateTime?  @map("payment_approved_at")
+  paymentConfirmationEmailSent   Boolean    @default(false) @map("payment_confirmation_email_sent")
+  sellerPaymentNotificationSent  Boolean    @default(false) @map("seller_payment_notification_sent")
 
   @@map("asset_bids")
+}
+
+model Notification {
+  id          String             @id @default(cuid())
+  userId      String             @map("user_id")
+  type        NotificationType   @map("type")
+  title       String
+  message     String
+  isRead      Boolean            @default(false) @map("is_read")
+  readAt      DateTime?          @map("read_at")
+  assetId     String?            @map("asset_id")
+  bidId       String?            @map("bid_id")
+  metadata    Json?
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  
+  roleContext String?            @map("role_context")
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  ASSET_CREATED
+  BID_RECEIVED
+  BID_ACCEPTED
+  BID_REJECTED
+  ASSET_UPDATED
+  BID_SAVED
+  PAYMENT_MADE
+  FEE_APPROVED
+  BILL_TO_PARTY_VALIDATED
+  ASSET_POSTED
+  ASSET_CANCELLED
 }

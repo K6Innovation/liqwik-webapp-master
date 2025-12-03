@@ -25,16 +25,16 @@ export default function BidItem({ asset, bid = {}, bidAction }: Props) {
 
   return (
      <tr className="border-t bg-white shadow-lg border border-gray-200">
-      <td className="py-3 px-4 text-left text-gray-600 align-top border-r border-gray-300">
+      <td className="py-3 px-4 text-left text-gray-600 align-top ">
         <span className="block whitespace-normal">{bid.buyer?.name}</span>
       </td>
-      <td className="py-3 px-4 font-semibold text-center align-top border-r border-gray-300">
+      <td className="py-3 px-4 font-semibold text-center align-top">
         €{bidAmount}
       </td>
-      <td className="py-3 px-4 text-gray-600 italic text-center align-top border-r border-gray-300">
+      <td className="py-3 px-4 text-gray-600 italic text-center align-top">
         {discount}%
       </td>
-      <td className="py-3 px-4 text-gray-600 italic text-center align-top border-r border-gray-300">
+      <td className="py-3 px-4 text-gray-600 italic text-center align-top">
         {apy}%
       </td>
       <td className="py-3 px-4 text-center align-top">

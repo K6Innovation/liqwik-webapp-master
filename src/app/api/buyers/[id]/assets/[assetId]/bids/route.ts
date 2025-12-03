@@ -1,8 +1,11 @@
+// src/app/api/buyers/[id]/assets/[assetId]/bids/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/utils/prisma-client";
 import dayjs from "dayjs";
 import CustomError from "@/utils/custom-error";
 import { getBuyerOrgs, getSellerOrgs } from "@/utils/api/get-user-orgs";
+import { NotificationService } from "@/utils/notification-service";
 
 export async function POST(
   req: NextRequest,
@@ -14,12 +17,28 @@ export async function POST(
     if (userOrgs.length === 0) {
       throw new CustomError("User is not associated with an Asset Buyer", 400);
     }
+
     const assetId = params.assetId;
     const asset = await prisma.asset.findUnique({
       where: {
         id: assetId,
       },
       include: {
+        seller: {
+          include: {
+            contact: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+        billToParty: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         bids: {
           include: {
             buyer: {
@@ -32,19 +51,31 @@ export async function POST(
         },
       },
     });
+
     if (!asset) {
       throw new CustomError("Asset not found", 400);
     }
+
     const buyer = await prisma.assetBuyer.findFirst({
       where: {
         id: userOrgs[0].id,
       },
+      include: {
+        contact: {
+          include: {
+            user: true,
+          },
+        },
+      },
     });
+
     if (!buyer) {
       throw new CustomError("Buyer not found", 400);
     }
+
     const formData: any = await req.formData();
     const totalAmount = formData.get("totalAmount");
+
     const bid = await prisma.assetBid.create({
       data: {
         assetId,
@@ -54,6 +85,22 @@ export async function POST(
         centsPerUnit: totalAmount * 100,
       },
     });
+
+    // Notify the seller about the new bid
+    await NotificationService.notifyBidReceived(
+      asset.seller.contact.user.id,
+      buyer.name,
+      asset,
+      bid
+    );
+
+    // NEW: Notify the buyer that their bid was saved successfully
+    await NotificationService.notifyBidSaved(
+      buyer.contact.user.id,
+      asset,
+      bid
+    );
+
     return NextResponse.json(bid);
   } catch (error: any) {
     console.log(error);

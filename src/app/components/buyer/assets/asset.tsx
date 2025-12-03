@@ -1,19 +1,14 @@
 "use client";
 
 import dayjs from "dayjs";
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState, useMemo } from "react";
 import { numericFormatter } from "react-number-format";
-import getStatusColor from "@/app/components/utils/get-status-color";
-import CloseButton from "@/app/components/widgets/buttons/close-button";
-import EditButton from "@/app/components/widgets/buttons/edit-button";
-import RoundBadge from "@/app/components/widgets/round-badge";
 import BidList from "./bid-list";
 import { useSession } from "next-auth/react";
-import Required from "../../widgets/required";
-import BidItem from "./bid-item";
-import BidForm from "./bid-form";
+import Image from "next/image";
+import { HiOutlineEye } from "react-icons/hi2";
 import YourBid from "./your-bid";
+import DocumentViewer from "../../assets/document-viewer";
 
 type Props = {
   asset: {
@@ -23,12 +18,16 @@ type Props = {
     invoiceNumber: string;
     invoiceDate: string;
     faceValue: number;
+    faceValueInCents?: number;
     paymentDate: string;
     proposedDiscount?: number;
-    // bidClosingDate: string;
+    termMonths?: number;
+    apy?: number;
     auctionStatus: string;
-    // auctionedUnits: number;
     bids: any[];
+    invoiceFilePath?: string;
+    bankStatementFilePath?: string;
+    billToPartyHistoryFilePath?: string;
   };
   editUrl: string;
   bidAction: (bId: string, action: string) => void;
@@ -46,11 +45,12 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function Asset({ asset, bidAction, editUrl }: Props) {
+export default function BuyerAsset({ asset, bidAction, editUrl }: Props) {
   const session = useSession();
   const [user, setUser] = useState<any>();
   const [otherBids, setOtherBids] = useState<any[]>([]);
   const [yourBid, setYourBid] = useState<any>();
+  const [showDocuments, setShowDocuments] = useState(false);
   const [newBid, setNewBid] = useState<any>({
     asset,
     numUnits: 0,
@@ -71,20 +71,84 @@ export default function Asset({ asset, bidAction, editUrl }: Props) {
     const yourBid = asset.bids.find(
       (b: any) => b.buyer.contact?.user?.id === user.id
     );
-    // const yourBid = undefined;
     setOtherBids(otherBids);
     if (yourBid) setYourBid(yourBid);
   }, [user, asset]);
 
+  // Get first two digits of face value
+  const faceValueFirstTwo = useMemo(() => {
+    const displayFaceValue = asset.faceValueInCents 
+      ? asset.faceValueInCents / 100 
+      : asset.faceValue;
+    const faceValueStr = displayFaceValue?.toString() || "0";
+    return faceValueStr.length >= 2 ? faceValueStr.substring(0, 2) : faceValueStr.padStart(2, '0');
+  }, [asset.faceValue, asset.faceValueInCents]);
+
+  // Check if any documents are available
+  const hasDocuments = asset.invoiceFilePath || asset.bankStatementFilePath || asset.billToPartyHistoryFilePath;
+
   return (
-    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
+    <div className="mt-6 p-6 bg-white rounded-lg mb-10">
       <div className="w-100 bg-white shadow-lg border border-gray-200 rounded-2xl p-6 mt-11 space-y-4">
-            <h2 className=" text-base font-semibold text-gray-800">Token Info</h2>
-            <img 
-              src="/liqwik-token.png" 
-              alt="Card Image" 
-              className="w-32 h-32 object-cover mx-auto rounded-lg"
-            /></div>
+        <h2 className="text-base font-semibold text-gray-800">Token Info</h2>
+        
+        {/* Gold Token with Dynamic Overlay Values - Larger Size */}
+        <div className="flex justify-center">
+          <div className="relative w-64 h-64">
+            <Image
+              src="/Transparent-Gold-image.png"
+              alt="Gold Liqwik Token"
+              width={256}
+              height={256}
+              className="object-contain"
+            />
+            {/* Overlay values on the token image */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="relative w-full h-full flex items-center justify-center">
+                {/* Duration (top center) */}
+                <div 
+                  className="absolute font-bold text-xl"
+                  style={{ 
+                    top: '18%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    color: '#D4AF37'
+                  }}
+                >
+                  {asset.termMonths || 0}
+                </div>
+                
+                {/* Face Value (center right - first two digits) */}
+                <div 
+                  className="absolute font-bold text-2xl"
+                  style={{ 
+                    top: '48%',
+                    left: '58%',
+                    transform: 'translateY(-50%)',
+                    color: '#D4AF37'
+                  }}
+                >
+                  {faceValueFirstTwo}
+                </div>
+                
+                {/* APY (bottom center) */}
+                <div 
+                  className="absolute font-bold text-xl"
+                  style={{ 
+                    bottom: '18%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    color: '#D4AF37'
+                  }}
+                >
+                  {asset.apy ? asset.apy.toFixed(0) : '0'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <div>
         <div className="mb-4 mt-10">
           <Field label="Bill-To Party" value={asset.billToParty.name} />
@@ -110,9 +174,6 @@ export default function Asset({ asset, bidAction, editUrl }: Props) {
               Payment Due
             </label>
             <div className="flex items-center">
-              {/* <RoundBadge size="xs" color={getStatusColor(asset.auctionStatus)}>
-                {asset.auctionedUnits}
-              </RoundBadge> */}
               <div className="font-bold text-gray-800">
                 {dayjs(asset.paymentDate).format("DD/MM/YYYY")}{" "}
                 <span className="italic font-normal text-gray-500">
@@ -122,8 +183,31 @@ export default function Asset({ asset, bidAction, editUrl }: Props) {
             </div>
           </div>
         </div>
+
+        {/* View Documents Button */}
+        <div className="mt-4">
+          <button
+            onClick={() => setShowDocuments(true)}
+            disabled={!hasDocuments}
+            className={`flex items-center justify-between border rounded-md p-3 w-full shadow-sm transition ${
+              hasDocuments
+                ? "border-gray-300 hover:bg-gray-50 cursor-pointer"
+                : "border-gray-200 bg-gray-50 cursor-not-allowed opacity-50"
+            }`}
+          >
+            <span className="text-gray-700">
+              {hasDocuments ? "View Documents" : "No Documents Available"}
+            </span>
+            {hasDocuments && (
+              <div className="border-l border-gray-300 pl-3">
+                <HiOutlineEye className="w-6 h-6 text-gray-600" />
+              </div>
+            )}
+          </button>
+        </div>
       </div>
-      <div className="flex flex-col gap-4 mb-4">
+      
+      <div className="flex flex-col gap-4 mb-4 mt-5">
         <BidList asset={asset} bids={otherBids} bidAction={bidAction} />
       </div>
 
@@ -146,6 +230,13 @@ export default function Asset({ asset, bidAction, editUrl }: Props) {
           </Link>
         </div> */}
       </div>
+
+      {/* Document Viewer Modal */}
+      <DocumentViewer
+        assetId={asset.id.toString()}
+        isOpen={showDocuments}
+        onClose={() => setShowDocuments(false)}
+      />
     </div>
   );
 }

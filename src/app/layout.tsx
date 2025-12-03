@@ -7,20 +7,20 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Liqwik",
-  description: "Bill Factorizing App",
+  description: "Asset Trading Platform",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en" data-theme="cupcake">
-      <body
-        className={`${inter.className} min-h-screen bg-base-100 text-base-content`}
-      >
-        <AuthContainer>{children}</AuthContainer>
+    <html lang="en">
+      <body className={inter.className}>
+        <AuthContainer>
+          {children}
+        </AuthContainer>
       </body>
     </html>
   );

@@ -15,6 +15,7 @@ export default function YourBid({ asset, bid, postBidAction }: Props) {
   const [discount, setDiscount] = useState(0);
   const [showBidForm, setShowBidForm] = useState(!bid);
   const [apy, setApy] = useState(0);
+  const [fractionDisc, setFractionDisc] = useState(0);
 
   useEffect(() => {
     if (!asset || !bid) return;
@@ -22,9 +23,12 @@ export default function YourBid({ asset, bid, postBidAction }: Props) {
       bid.totalAmount || (bid.numUnits * bid.centsPerUnit) / 100;
     // const discount = Math.ceil((bidAmount / asset.faceValue) * 100);
     const discount = getDiscount(asset, { totalAmount: bidAmount }) || 0;
+    const fractionDisc = asset.faceValue > 0 ? ((bidAmount / asset.faceValue) * 100) : 0;
+
     setBidAmount(bidAmount);
     setDiscount(discount);
     setApy(getAPY(asset, { totalAmount: bidAmount }) || 0);
+     setFractionDisc(fractionDisc);
   }, [asset, bid]);
 
   useEffect(() => {
@@ -54,21 +58,25 @@ export default function YourBid({ asset, bid, postBidAction }: Props) {
                 <th className="border border-gray-300 px-4 py-2">Name</th>
                 <th className="border border-gray-300 px-4 py-2">Amount</th>
                 <th className="border border-gray-300 px-4 py-2">Disc</th>
+                <th className="border border-gray-300 px-4 py-2">Fraction Disc</th>
                 <th className="border border-gray-300 px-4 py-2">APY</th>
                 <th className="border border-gray-300 px-4 py-2">Edit</th>
               </tr>
             </thead>
           <tr className="border-t bg-white shadow-lg border border-gray-200">
-      <td className="py-3 px-4 text-left text-gray-600 align-top border-r border-gray-300">
+      <td className="py-3 px-4 text-left text-gray-600 align-top">
         <span className="block whitespace-normal">{bid.buyer?.name}</span>
       </td>
-      <td className="py-3 px-4 font-semibold text-center align-top border-r border-gray-300">
+      <td className="py-3 px-4 font-semibold text-center align-top">
         €{bidAmount}
       </td>
-      <td className="py-3 px-4 text-gray-600 italic text-center align-top border-r border-gray-300">
+      <td className="py-3 px-4 text-gray-600 italic text-center align-top">
         {discount}%
       </td>
-      <td className="py-3 px-4 text-gray-600 italic text-center align-top border-r border-gray-300">
+       <td className="py-3 px-4 text-gray-600 italic text-center align-top">
+        {fractionDisc.toFixed(2)}%
+       </td>
+      <td className="py-3 px-4 text-gray-600 italic text-center align-top">
         {apy}%
       </td>
       <td className="py-3 px-4 text-center align-top">

@@ -1,3 +1,4 @@
+// src/app/api/buyers/[id]/assets/[assetId]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/utils/prisma-client";
 import dayjs from "dayjs";
@@ -54,14 +55,30 @@ export async function GET(
   if (userOrgs.length === 0) {
     throw new CustomError("User is not associated with an Asset Buyer", 400);
   }
+  
+  // Fetch the asset with all necessary fields including file paths
   const asset: any = await prisma.asset.findUnique({
     where: {
       id: assetId,
     },
-    ...assetIncludes,
+    include: {
+      billToParty: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
   });
+
+  if (!asset) {
+    throw new CustomError("Asset not found", 404);
+  }
+
+  // Get bids for this asset
   const bids = await getAssetBids(assetId);
   asset.bids = bids;
+  
   return NextResponse.json(asset);
 }
 
@@ -139,7 +156,7 @@ export async function POST(
     updatedAsset.bids = await getAssetBids(assetId);
     return NextResponse.json(updatedAsset);
   } catch (error: any) {
-    const errObj = { status: "error" };
+    console.error("Error updating asset:", error);
     if (error.message === "INVALID_REQUEST") {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

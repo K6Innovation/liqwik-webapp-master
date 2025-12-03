@@ -1,3 +1,4 @@
+// src/app/api/bill-to-parties/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/utils/prisma-client";
 import dayjs from "dayjs";
@@ -7,11 +8,12 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const billTiparties = await prisma.billToParty.findMany({
+  const billToParties = await prisma.billToParty.findMany({
     select: {
       id: true,
       name: true,
+      email: true, // Include email field
     },
   });
-  return NextResponse.json(billTiparties);
+  return NextResponse.json(billToParties);
 }

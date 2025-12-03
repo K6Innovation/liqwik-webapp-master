@@ -32,14 +32,15 @@ function preprocessAsset(asset: any) {
   return updatedAsset;
 }
 
-export default function AssetPage({}: Props) {
+export default function SellerAssetPage({}: Props) {
   const router = useRouter();
   const session = useSession();
   const [user, setUser] = useState<any>();
   const editAsset = useSearchParams().get("edit") === "true";
-  const { assetId } = useParams();
+  const { id, assetId } = useParams();
   const [loading, setLoading] = useState(true);
   const [asset, setAsset] = useState<any>(newAsset);
+  const [currentRole, setCurrentRole] = useState<string>("");
 
   useEffect(() => {
     if (session?.status === "authenticated" && session?.data?.user) {
@@ -47,29 +48,62 @@ export default function AssetPage({}: Props) {
     }
   }, [session]);
 
+  // Get current role
   useEffect(() => {
-    if (!user) return;
+    if (user) {
+      const selectedRole = user.selectedRole;
+      if (selectedRole) {
+        setCurrentRole(selectedRole);
+      } else if (typeof window !== 'undefined') {
+        const storedRole = localStorage.getItem('selectedRole');
+        if (storedRole) {
+          setCurrentRole(storedRole);
+        }
+      }
+    }
+  }, [user]);
+
+  // Verify access and fetch asset
+  useEffect(() => {
+    if (!user || !currentRole) return;
+
+    // Check if user ID matches
+    if (user.id !== id) {
+      router.push(`/sellers/${user.id}/assets/${assetId}`);
+      return;
+    }
+
+    // Check if user has seller role
+    const hasSellerRole = user.roles?.includes('seller') || currentRole === 'seller';
+    if (!hasSellerRole) {
+      router.push('/');
+      return;
+    }
+
     if (assetId !== "new") {
-      (async () => {
-        setLoading(true);
-        const asset = await fetch(
-          `/api/sellers/${user.id}/assets/${assetId}`
-        ).then((res) => res.json());
-        setAsset(preprocessAsset(asset));
-        setLoading(false);
-      })();
+      setLoading(true);
+      fetch(`/api/sellers/${user.id}/assets/${assetId}`)
+        .then((res) => res.json())
+        .then((asset) => {
+          setAsset(preprocessAsset(asset));
+          setLoading(false);
+        })
+        .catch((error) => {
+          console.error("Error fetching asset:", error);
+          setLoading(false);
+        });
     } else {
       setLoading(false);
     }
-  }, [user, assetId]);
+  }, [user, id, assetId, currentRole, router]);
 
   const updateAsset = useMemo(() => {
     return (asset: any) => {
       const updatedAsset = preprocessAsset(asset);
-      setAsset(preprocessAsset(asset));
-      router.replace(`/assets/${asset.id}`);
+      setAsset(updatedAsset);
+      router.replace(`/sellers/${user.id}/assets/${asset.id}`);
     };
-  }, [asset]);
+  }, [router, user]);
 
   const bidAction = useMemo(() => {
     return async (bidId: string, action: string) => {
@@ -77,6 +111,9 @@ export default function AssetPage({}: Props) {
         `/api/sellers/${user.id}/assets/${asset.id}/bids`,
         {
           method: "POST",
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({ bidId, action }),
         }
       );
@@ -87,19 +124,28 @@ export default function AssetPage({}: Props) {
     };
   }, [asset, user]);
 
+  if (loading) {
+    return <Loading />;
+  }
+
+  if (currentRole !== "seller") {
+    return (
+      <div className="p-4 text-center">
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">Access Denied</h2>
+        <p className="text-gray-600">You need seller privileges to access this page.</p>
+      </div>
+    );
+  }
+
+  if (assetId === "new" || editAsset) {
+    return <AssetForm asset={asset} postSaveAction={updateAsset} />;
+  }
+
   return (
-    <>
-      {loading ? (
-        <Loading />
-      ) : assetId === "new" || editAsset ? (
-        <AssetForm asset={asset} postSaveAction={updateAsset} />
-      ) : (
-        <Asset
-          asset={asset}
-          bidAction={bidAction}
-          editUrl={`/sellers/${user?.id}/assets/${assetId}?edit=true`}
-        />
-      )}
-    </>
+    <Asset
+      asset={asset}
+      bidAction={bidAction}
+      editUrl={`/sellers/${user?.id}/assets/${assetId}?edit=true`}
+    />
   );
 }

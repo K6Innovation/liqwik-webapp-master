@@ -37,3 +37,6 @@ next-env.d.ts
 
 .env
 dist/*
+
+# Uploaded files (added for asset documents)
+/public/uploads/
