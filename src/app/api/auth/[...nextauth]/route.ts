@@ -3,7 +3,7 @@ import authOptions from "@/auth-options";
 
 const handlers = NextAuth(authOptions);
 
-export { handlers as GET, handlers as POST };
+export { handlers as GET, handlers as POST, authOptions };
 
 // export async function GET(req: any, res: any) {
 //   // Do whatever you want here, before the request is passed down to `NextAuth`

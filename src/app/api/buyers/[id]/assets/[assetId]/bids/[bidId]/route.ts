@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 import CustomError from "@/utils/custom-error";
 import { getBuyerOrgs } from "@/utils/api/get-user-orgs";
 import { NotificationService } from "@/utils/notification-service";
+import { emailService } from "@/utils/email-service";
 
 export async function POST(
   req: NextRequest,
@@ -112,6 +113,12 @@ export async function PATCH(
       throw new CustomError("paymentApproved field is required", 400);
     }
 
+    console.log("=== Payment Approval via UI ===");
+    console.log("User ID:", userId);
+    console.log("Asset ID:", assetId);
+    console.log("Bid ID:", bidId);
+    console.log("Payment Approved:", paymentApproved);
+
     // Fetch asset and bid with full details including seller
     const asset = await prisma.asset.findUnique({
       where: { id: assetId },
@@ -162,6 +169,17 @@ export async function PATCH(
       throw new CustomError("Unauthorized: You can only approve payment for your own bids", 403);
     }
 
+    // Check if payment was already approved
+    if (bid.paymentApprovedByBuyer) {
+      console.log("Payment already approved for this bid");
+      return NextResponse.json({
+        success: true,
+        message: "Payment already approved",
+        alreadyApproved: true,
+        bid: bid,
+      });
+    }
+
     // Update bid with payment approval
     const updatedBid = await prisma.assetBid.update({
       where: { id: bidId },
@@ -171,8 +189,84 @@ export async function PATCH(
       },
     });
 
-    // NEW: If payment is approved, send bell notifications to both buyer and seller
+    console.log("✓ Bid updated with payment approval");
+
+    // If payment is approved, send emails and notifications
     if (paymentApproved) {
+      const bidAmount = (bid.numUnits * bid.centsPerUnit) / 100;
+      const faceValue = asset.faceValueInCents / 100;
+      const confirmedAt = new Date().toISOString();
+
+      console.log("=== Sending Payment Confirmation Emails ===");
+      console.log("Buyer Email:", bid.buyer.contact.user.email);
+      console.log("Seller Email:", asset.seller.contact.user.email);
+
+      // Send payment confirmation email to buyer
+      let buyerEmailSent = false;
+      try {
+        await emailService.sendPaymentConfirmationEmail({
+          buyerEmail: bid.buyer.contact.user.email,
+          buyerName: bid.buyer.name,
+          sellerName: asset.seller.name,
+          invoiceNumber: asset.invoiceNumber,
+          faceValue,
+          bidAmount,
+          invoiceDate: asset.invoiceDate.toISOString(),
+          paymentDate: asset.paymentDate.toISOString(),
+          confirmedAt,
+          bidId: bid.id,
+        });
+
+        // Mark buyer email as sent
+        await prisma.assetBid.update({
+          where: {
+            id: bid.id,
+          },
+          data: {
+            paymentConfirmationEmailSent: true,
+          },
+        });
+
+        buyerEmailSent = true;
+        console.log(`✓ Payment confirmation email sent to buyer: ${bid.buyer.contact.user.email}`);
+      } catch (emailError) {
+        console.error("✗ Failed to send payment confirmation email to buyer:", emailError);
+      }
+
+      // Send payment notification email to seller
+      let sellerEmailSent = false;
+      try {
+        await emailService.sendSellerPaymentNotificationEmail({
+          sellerEmail: asset.seller.contact.user.email,
+          sellerName: asset.seller.name,
+          buyerName: bid.buyer.name,
+          invoiceNumber: asset.invoiceNumber,
+          faceValue,
+          bidAmount,
+          invoiceDate: asset.invoiceDate.toISOString(),
+          paymentDate: asset.paymentDate.toISOString(),
+          confirmedAt,
+          bidId: bid.id,
+        });
+
+        // Mark seller notification email as sent
+        await prisma.assetBid.update({
+          where: {
+            id: bid.id,
+          },
+          data: {
+            sellerPaymentNotificationSent: true,
+          },
+        });
+
+        sellerEmailSent = true;
+        console.log(`✓ Payment notification email sent to seller: ${asset.seller.contact.user.email}`);
+      } catch (emailError) {
+        console.error("✗ Failed to send payment notification email to seller:", emailError);
+      }
+
+      // Send bell notifications to both buyer and seller
+      let notificationsSent = false;
       try {
         await NotificationService.notifyPaymentMade(
           bid.buyer.contact.user.id,
@@ -180,11 +274,29 @@ export async function PATCH(
           asset,
           updatedBid
         );
-        console.log(`Payment notifications sent to buyer ${bid.buyer.contact.user.id} and seller ${asset.seller.contact.user.id}`);
+        notificationsSent = true;
+        console.log(`✓ Bell notifications sent to buyer ${bid.buyer.contact.user.id} and seller ${asset.seller.contact.user.id}`);
       } catch (notificationError) {
-        console.error("Failed to send payment notifications:", notificationError);
-        // Don't fail the request if notification fails
+        console.error("✗ Failed to send payment notifications:", notificationError);
       }
+
+      console.log("=== Payment Approval Complete ===");
+      console.log("Summary:");
+      console.log(`- Payment approved: ✓`);
+      console.log(`- Buyer email sent: ${buyerEmailSent ? '✓' : '✗'}`);
+      console.log(`- Seller email sent: ${sellerEmailSent ? '✓' : '✗'}`);
+      console.log(`- Bell notifications sent: ${notificationsSent ? '✓' : '✗'}`);
+
+      return NextResponse.json({
+        success: true,
+        message: "Payment approved successfully",
+        bid: updatedBid,
+        emails: {
+          buyerEmailSent,
+          sellerEmailSent,
+        },
+        notificationsSent,
+      });
     }
 
     return NextResponse.json(updatedBid);

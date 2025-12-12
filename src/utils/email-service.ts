@@ -2738,24 +2738,6 @@ async sendBillToPartyValidationEmail(
             </p>
           </div>
           
-          <div style="text-align: center;">
-            <a href="${paymentApprovalUrl}" class="cta-button">
-              Confirm Payment Completion
-            </a>
-          </div>
-          
-          <div class="info-box">
-            <p>
-              <strong>Payment Process:</strong><br>
-              1. Transfer the amount of ${data.bidAmount.toFixed(
-                2
-              )} EUR to the seller's designated account<br>
-              2. Click the "Confirm Payment Completion" button above to notify us<br>
-              3. Await verification and confirmation from our team<br>
-              4. You will receive a final confirmation email once the payment is verified
-            </p>
-          </div>
-          
           <p style="color: #6b7280; margin-top: 35px; line-height: 1.6;">
             Should you require any assistance with the payment process or have questions regarding this transaction, please do not hesitate to contact our customer support team.
           </p>

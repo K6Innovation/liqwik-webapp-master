@@ -1,3 +1,5 @@
+// src/app/components/seller/assets/bid-item.tsx
+
 import React, { useEffect, useState } from "react";
 import AcceptButton from "@/app/components/widgets/buttons/accept-button";
 import getAPY from "../../utils/get-apy";
@@ -27,21 +29,34 @@ export default function BidItem({ asset, bid = {}, bidAction }: Props) {
     setFractionDisc(fractionDisc);
   }, [asset, bid]);
 
+  // Check if any bid has been accepted for this asset
+  const hasAcceptedBid = asset.bids?.some((b: any) => b.accepted && b.id !== bid.id);
+  const isThisBidAccepted = bid.accepted;
+  const isRejected = bid.rejected;
+
+  // Disable accept button if another bid is already accepted
+  const isDisabled = hasAcceptedBid && !isThisBidAccepted;
+
   return (
-
-
-    <tr className="border-t w-full bg-white shadow-lg border border-gray-200 rounded-2xl p-6">
+    <tr className={`border-t w-full shadow-lg border border-gray-200 rounded-2xl p-6 ${
+      isRejected ? 'bg-red-50 opacity-60' : isThisBidAccepted ? 'bg-green-50' : 'bg-white'
+    }`}>
       <td className="py-2 text-sm text-gray-600">{bid.buyer.name}</td>
       <td className="py-2 font-semibold">€{bidAmount}</td>
       <td className="py-2 text-gray-600 italic">{discount}%</td>
-       <td className="py-2 text-gray-600 italic">{fractionDisc.toFixed(2)}%</td>
+      <td className="py-2 text-gray-600 italic">{fractionDisc.toFixed(2)}%</td>
       <td className="py-2 text-gray-600 italic">{apy}%</td>
       <td className="py-2 text-gray-400">
-        <AcceptButton
-          className={`btn-sm btn-ghost ${bid.accepted ? "text-success" : ""}`}
-          iconStyle={bid.accepted ? "solid" : "outline"}
-          onClick={() => bidAction(bid.id, bid.accepted ? "cancel-accept" : "accept")}
-        />
+        {isRejected ? (
+          <span className="text-xs text-red-600 font-semibold">Rejected</span>
+        ) : (
+          <AcceptButton
+            className={`btn-sm btn-ghost ${isThisBidAccepted ? "text-success" : ""} ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`}
+            iconStyle={isThisBidAccepted ? "solid" : "outline"}
+            onClick={() => !isDisabled && bidAction(bid.id, isThisBidAccepted ? "cancel-accept" : "accept")}
+            disabled={isDisabled}
+          />
+        )}
       </td>
     </tr>
   );

@@ -41,17 +41,25 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
       const response = await fetch(`/api/buyers/${userId}/assets?filterByBids=true`);
       const allAssets = await response.json();
       
-      // Filter assets with accepted bids that need payment approval
+      // Filter assets where THIS USER has an accepted bid that needs payment
       const assetsNeedingPayment = allAssets.filter((asset: any) => {
-        const acceptedBid = asset.bids.find((bid: any) => bid.accepted);
-        if (!acceptedBid) return false;
+        // Find if this user has a bid on this asset
+        const userBid = asset.bids.find((bid: any) => 
+          bid.buyer?.contact?.user?.id === userId
+        );
         
-        // Check if payment is not yet approved
-        if (acceptedBid.paymentApprovedByBuyer) return false;
+        // Only include if:
+        // 1. This user has a bid
+        // 2. Their bid is accepted
+        // 3. Payment is not yet approved
+        // 4. Payment deadline hasn't passed (if exists)
+        if (!userBid || !userBid.accepted || userBid.paymentApprovedByBuyer) {
+          return false;
+        }
         
         // Check if payment deadline exists and hasn't passed
-        if (acceptedBid.paymentDeadline) {
-          const deadline = new Date(acceptedBid.paymentDeadline);
+        if (userBid.paymentDeadline) {
+          const deadline = new Date(userBid.paymentDeadline);
           const now = new Date();
           
           // Include if deadline hasn't passed yet
@@ -79,10 +87,24 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
 
     try {
       setConfirming(true);
-      const acceptedBid = selectedAsset.bids.find((bid: any) => bid.accepted);
       
+      // Find THIS USER's accepted bid
+      const userBid = selectedAsset.bids.find((bid: any) => 
+        bid.buyer?.contact?.user?.id === userId && bid.accepted
+      );
+      
+      if (!userBid) {
+        alert("Could not find your accepted bid");
+        return;
+      }
+      
+      console.log("=== Payment Confirmation via UI ===");
+      console.log("Confirming payment for bid:", userBid.id);
+      console.log("Asset:", selectedAsset.id);
+      
+      // Call the API to confirm payment and send emails
       const response = await fetch(
-        `/api/buyers/${userId}/assets/${selectedAsset.id}/bids/${acceptedBid.id}`,
+        `/api/buyers/${userId}/assets/${selectedAsset.id}/bids/${userBid.id}`,
         {
           method: "PATCH",
           headers: {
@@ -95,6 +117,9 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
       );
 
       if (response.ok) {
+        console.log("✓ Payment confirmed successfully");
+        console.log("✓ Emails should be sent to buyer and seller");
+        
         // Remove the asset from pending list
         setPendingAssets(prev => prev.filter(a => a.id !== selectedAsset.id));
         setShowConfirmation(false);
@@ -109,6 +134,8 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
           onClose();
         }
       } else {
+        const errorData = await response.json();
+        console.error("Failed to confirm payment:", errorData);
         alert("Failed to confirm payment. Please try again.");
       }
     } catch (error) {
@@ -140,7 +167,7 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
   };
 
   const getFaceValueFirstTwo = (faceValue: number) => {
-    const faceValueStr = faceValue?.toString() || "0";
+    const faceValueStr = faceValue?.toString().replace(/\D/g, '') || "0";
     return faceValueStr.length >= 2 ? faceValueStr.substring(0, 2) : faceValueStr.padStart(2, '0');
   };
 
@@ -183,14 +210,17 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
           ) : (
             <div className="space-y-4">
               {pendingAssets.map((asset) => {
-                const acceptedBid = asset.bids.find((bid: any) => bid.accepted);
-                const bidAmount = acceptedBid ? (acceptedBid.centsPerUnit * acceptedBid.numUnits) / 100 : 0;
-                const countdown = getPaymentCountdown(acceptedBid?.paymentDeadline);
-                const tokenColor = asset.feeApprovedBySeller ? 'gold' : 'copper';
-                const tokenImagePath = asset.feeApprovedBySeller 
-                  ? "/Transparent-Gold-image.png" 
-                  : "/Transparent-Copper-image.png";
-                const faceValueFirstTwo = getFaceValueFirstTwo(asset.faceValueInCents ? asset.faceValueInCents / 100 : 0);
+                // Get THIS USER's accepted bid
+                const userBid = asset.bids.find((bid: any) => 
+                  bid.buyer?.contact?.user?.id === userId && bid.accepted
+                );
+                
+                if (!userBid) return null;
+                
+                const bidAmount = userBid ? (userBid.centsPerUnit * userBid.numUnits) / 100 : 0;
+                const countdown = getPaymentCountdown(userBid?.paymentDeadline);
+                const faceValue = asset.faceValueInCents ? asset.faceValueInCents / 100 : 0;
+                const faceValueFirstTwo = getFaceValueFirstTwo(faceValue);
 
                 return (
                   <div
@@ -199,46 +229,51 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
                     className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl p-5 border-2 border-pink-200 hover:border-pink-400 cursor-pointer transition-all hover:shadow-lg"
                   >
                     <div className="flex items-center gap-4">
-                      {/* Token */}
-                      <div className="relative w-16 h-16 flex-shrink-0">
+                      {/* Green Token with Dynamic Values */}
+                      <div className="relative w-20 h-20 flex-shrink-0">
                         <Image
-                          src={tokenImagePath}
+                          src="/Transparent-Green-image.png"
                           alt="Liqwik Token"
-                          width={64}
-                          height={64}
+                          width={80}
+                          height={80}
                           className="object-contain drop-shadow-lg"
                         />
                         <div className="absolute inset-0 flex items-center justify-center">
                           <div className="relative w-full h-full flex items-center justify-center">
+                            {/* Duration (top center) */}
                             <div 
-                              className="absolute font-bold text-[7px]"
+                              className="absolute font-bold text-[9px]"
                               style={{ 
                                 top: '18%',
                                 left: '50%',
                                 transform: 'translateX(-50%)',
-                                color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
+                                color: '#228B22'
                               }}
                             >
                               {asset.termMonths || 0}
                             </div>
+                            
+                            {/* Face Value (center right - first two digits) */}
                             <div 
-                              className="absolute font-bold text-[9px]"
+                              className="absolute font-bold text-xs"
                               style={{ 
                                 top: '48%',
                                 left: '58%',
                                 transform: 'translateY(-50%)',
-                                color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
+                                color: '#228B22'
                               }}
                             >
                               {faceValueFirstTwo}
                             </div>
+                            
+                            {/* APY (bottom center) */}
                             <div 
-                              className="absolute font-bold text-[7px]"
+                              className="absolute font-bold text-[9px]"
                               style={{ 
                                 bottom: '18%',
                                 left: '50%',
                                 transform: 'translateX(-50%)',
-                                color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
+                                color: '#228B22'
                               }}
                             >
                               {asset.apy ? asset.apy.toFixed(0) : '0'}
@@ -312,7 +347,14 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
                   <strong>Seller:</strong> {selectedAsset.billToParty.name}
                 </p>
                 <p className="text-sm text-gray-700">
-                  <strong>Amount:</strong> €{((selectedAsset.bids.find((b: any) => b.accepted)?.centsPerUnit || 0) / 100).toFixed(2)}
+                  <strong>Amount:</strong> €{
+                    (() => {
+                      const userBid = selectedAsset.bids.find((b: any) => 
+                        b.buyer?.contact?.user?.id === userId && b.accepted
+                      );
+                      return userBid ? ((userBid.centsPerUnit * userBid.numUnits) / 100).toFixed(2) : '0.00';
+                    })()
+                  }
                 </p>
               </div>
 
@@ -329,7 +371,7 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
                   disabled={confirming}
                   className="flex-1 px-4 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:opacity-50"
                 >
-                  Pay, Later
+                  Pay Later
                 </button>
                 <button
                   onClick={handleConfirmPayment}

@@ -401,6 +401,10 @@ export async function GET(
     const faceValue = bid.asset.faceValueInCents / 100;
     const confirmedAt = new Date().toISOString();
 
+    console.log("=== Sending Payment Confirmation Emails ===");
+    console.log("Buyer Email:", bid.buyer.contact.user.email);
+    console.log("Seller Email:", bid.asset.seller.contact.user.email);
+
     // Send payment confirmation email to buyer
     try {
       await emailService.sendPaymentConfirmationEmail({
@@ -426,9 +430,9 @@ export async function GET(
         },
       });
       
-      console.log(`Payment confirmation email sent to buyer: ${bid.buyer.contact.user.email}`);
+      console.log(`✓ Payment confirmation email sent to buyer: ${bid.buyer.contact.user.email}`);
     } catch (emailError) {
-      console.error("Failed to send payment confirmation email to buyer:", emailError);
+      console.error("✗ Failed to send payment confirmation email to buyer:", emailError);
       // Don't fail the request if email fails - payment is still confirmed
     }
 
@@ -457,13 +461,13 @@ export async function GET(
         },
       });
       
-      console.log(`Payment notification email sent to seller: ${bid.asset.seller.contact.user.email}`);
+      console.log(`✓ Payment notification email sent to seller: ${bid.asset.seller.contact.user.email}`);
     } catch (emailError) {
-      console.error("Failed to send payment notification email to seller:", emailError);
+      console.error("✗ Failed to send payment notification email to seller:", emailError);
       // Don't fail the request if email fails - payment is still confirmed
     }
 
-    // NEW: Send bell notifications to both buyer and seller
+    // Send bell notifications to both buyer and seller
     try {
       await NotificationService.notifyPaymentMade(
         bid.buyer.contact.user.id,
@@ -471,11 +475,13 @@ export async function GET(
         bid.asset,
         bid
       );
-      console.log(`Bell notifications sent to buyer ${bid.buyer.contact.user.id} and seller ${bid.asset.seller.contact.user.id} for payment made`);
+      console.log(`✓ Bell notifications sent to buyer ${bid.buyer.contact.user.id} and seller ${bid.asset.seller.contact.user.id}`);
     } catch (notificationError) {
-      console.error("Failed to send payment notifications:", notificationError);
+      console.error("✗ Failed to send payment notifications:", notificationError);
       // Don't fail the request if notification fails
     }
+
+    console.log("=== Payment Approval Complete ===");
 
     // Return success page
     return new NextResponse(
@@ -636,8 +642,8 @@ export async function GET(
           
           <div class="email-notice">
             <strong>Confirmation Emails Sent</strong>
-            <p>Payment confirmation sent to your email address</p>
-            <p>Payment notification sent to the seller</p>
+            <p>✓ Payment confirmation sent to your email address</p>
+            <p>✓ Payment notification sent to the seller</p>
           </div>
           
           <div class="details">

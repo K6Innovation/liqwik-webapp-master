@@ -1,17 +1,28 @@
+// src/app/components/buyer/assets/liqwik-list.tsx
+
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useSession } from "next-auth/react";
 
 type Props = {
   assets: any[];
 };
 
 export default function LiqwikList({ assets = [] }: Props) {
+  const session = useSession();
+  const [user, setUser] = useState<any>();
   const [filteredAssets, setFilteredAssets] = useState<any[]>([]);
   const [selectedParties, setSelectedParties] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    if (session?.status === "authenticated" && session?.data?.user) {
+      setUser(session.data.user);
+    }
+  }, [session]);
 
   // Update current time every second for countdown
   useEffect(() => {
@@ -34,7 +45,7 @@ export default function LiqwikList({ assets = [] }: Props) {
 
   // Apply filters
   useEffect(() => {
-    let filtered = [...assets]; // Show ALL assets
+    let filtered = [...assets];
 
     // Filter by selected parties
     if (selectedParties.length > 0) {
@@ -74,36 +85,63 @@ export default function LiqwikList({ assets = [] }: Props) {
   };
 
   const getBidStatus = (asset: any) => {
-    if (!asset.bids || asset.bids.length === 0) return { 
-      total: 0, 
-      accepted: 0, 
-      pending: 0, 
-      hasAcceptedBid: false, 
-      paymentDeadline: null,
-      paymentApproved: false,
-      paymentApprovedAt: null
-    };
+    if (!asset.bids || asset.bids.length === 0 || !user) {
+      return { 
+        total: 0, 
+        accepted: 0, 
+        pending: 0,
+        rejected: 0,
+        hasAcceptedBid: false, 
+        hasRejectedBid: false,
+        paymentDeadline: null,
+        paymentApproved: false,
+        paymentApprovedAt: null,
+        canAccessAsset: true // Can access if no bids
+      };
+    }
     
-    const accepted = asset.bids.filter((bid: any) => bid.accepted).length;
-    const total = asset.bids.length;
-    const pending = total - accepted;
-    const acceptedBid = asset.bids.find((bid: any) => bid.accepted);
+    // Find THIS USER's bid
+    const userBid = asset.bids.find((bid: any) => 
+      bid.buyer?.contact?.user?.id === user.id
+    );
+    
+    if (!userBid) {
+      // User hasn't placed a bid yet
+      return {
+        total: asset.bids.length,
+        accepted: 0,
+        pending: 0,
+        rejected: 0,
+        hasAcceptedBid: false,
+        hasRejectedBid: false,
+        paymentDeadline: null,
+        paymentApproved: false,
+        paymentApprovedAt: null,
+        canAccessAsset: true // Can access to place bid
+      };
+    }
+    
+    // Check user's bid status
+    const isAccepted = userBid.accepted;
+    const isRejected = userBid.rejected;
     
     return { 
-      total, 
-      accepted, 
-      pending,
-      hasAcceptedBid: accepted > 0,
-      paymentDeadline: acceptedBid?.paymentDeadline || null,
-      paymentApproved: acceptedBid?.paymentApprovedByBuyer || false,
-      paymentApprovedAt: acceptedBid?.paymentApprovedAt || null
+      total: asset.bids.length, 
+      accepted: isAccepted ? 1 : 0, 
+      pending: !isAccepted && !isRejected ? 1 : 0,
+      rejected: isRejected ? 1 : 0,
+      hasAcceptedBid: isAccepted,
+      hasRejectedBid: isRejected,
+      paymentDeadline: userBid?.paymentDeadline || null,
+      paymentApproved: userBid?.paymentApprovedByBuyer || false,
+      paymentApprovedAt: userBid?.paymentApprovedAt || null,
+      canAccessAsset: !isRejected // Can't access if rejected
     };
   };
 
   const getPaymentCountdown = (paymentDeadline: string | null, paymentApproved: boolean) => {
     if (!paymentDeadline) return null;
     
-    // If payment is approved, show completion message
     if (paymentApproved) {
       return { expired: false, text: "Payment Confirmed", urgent: false, completed: true };
     }
@@ -133,7 +171,6 @@ export default function LiqwikList({ assets = [] }: Props) {
     setSelectedParties([]);
   };
 
-  // Get first two digits of face value
   const getFaceValueFirstTwo = (faceValue: number) => {
     const faceValueStr = faceValue?.toString() || "0";
     return faceValueStr.length >= 2 ? faceValueStr.substring(0, 2) : faceValueStr.padStart(2, '0');
@@ -199,7 +236,6 @@ export default function LiqwikList({ assets = [] }: Props) {
                 Bill-to Parties ({selectedParties.length}/{getBillToParties().length})
               </h3>
               
-              {/* Selected parties display */}
               <div className="mb-2">
                 {selectedParties.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -223,7 +259,6 @@ export default function LiqwikList({ assets = [] }: Props) {
                 )}
               </div>
 
-              {/* Dropdown Button */}
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 border border-pink-200 rounded-lg bg-white text-left focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
@@ -238,7 +273,6 @@ export default function LiqwikList({ assets = [] }: Props) {
                 </svg>
               </button>
 
-              {/* Dropdown Menu */}
               {isDropdownOpen && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-pink-200 rounded-lg shadow-xl max-h-60 overflow-auto">
                   <div className="px-3 py-2 bg-gradient-to-r from-pink-50 to-purple-50 border-b border-pink-100 flex justify-between">
@@ -301,15 +335,19 @@ export default function LiqwikList({ assets = [] }: Props) {
               const faceValueFirstTwo = getFaceValueFirstTwo(asset.faceValueInCents ? asset.faceValueInCents / 100 : 0);
               const countdown = bidStatus.hasAcceptedBid ? getPaymentCountdown(bidStatus.paymentDeadline, bidStatus.paymentApproved) : null;
               
+              // Determine if card should be clickable
+              const isClickable = bidStatus.canAccessAsset;
+              
               return (
-                <Link
-                  key={asset.id}
-                  href={`/assets/${asset.id}`}
-                  className="block"
-                >
-                  <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden hover:shadow-xl hover:border-pink-200 transition-all duration-300 transform hover:-translate-y-1">
+                <div key={asset.id} className="block">
+                  {isClickable ? (
+                    <Link href={`/assets/${asset.id}`}>
+                      <div className={`bg-white rounded-xl shadow-md border overflow-hidden transition-all duration-300 ${
+                        bidStatus.hasRejectedBid 
+                          ? 'border-red-200 bg-red-50 opacity-60 cursor-not-allowed' 
+                          : 'border-gray-100 hover:shadow-xl hover:border-pink-200 transform hover:-translate-y-1 cursor-pointer'
+                      }`}>
                     <div className="flex items-center p-5">
-                      {/* Token coin with overlay values */}
                       <div className="relative w-20 h-20 flex-shrink-0">
                         <Image
                           src={tokenImagePath}
@@ -393,13 +431,13 @@ export default function LiqwikList({ assets = [] }: Props) {
 
                           <span className="text-gray-300">|</span>
                           
-                          {/* Payment Status */}
-                          {bidStatus.total === 0 ? (
-                            <div className="flex items-center gap-1.5 text-gray-500">
+                          {/* Bid Status */}
+                          {bidStatus.hasRejectedBid ? (
+                            <div className="flex items-center gap-1.5 text-red-600 font-medium">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              <span>No bids yet</span>
+                              <span>Bid Rejected</span>
                             </div>
                           ) : bidStatus.hasAcceptedBid ? (
                             <div className="flex items-center gap-1.5">
@@ -442,28 +480,184 @@ export default function LiqwikList({ assets = [] }: Props) {
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              <span>{bidStatus.pending} pending</span>
-                              <span className="text-gray-400">({bidStatus.total} total)</span>
+                              <span>Bid Pending</span>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1.5 text-blue-600 font-medium">
+                            <div className="flex items-center gap-1.5 text-gray-500">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                               </svg>
-                              <span>{bidStatus.total} bids</span>
+                              <span>No bid placed</span>
                             </div>
                           )}
                         </div>
                       </div>
                       
-                      <div className="text-pink-500 flex-shrink-0 ml-4">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
+                      {isClickable && (
+                        <div className="text-pink-500 flex-shrink-0 ml-4">
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </Link>
+                    </Link>
+                  ) : (
+                    <div className={`bg-white rounded-xl shadow-md border overflow-hidden transition-all duration-300 ${
+                      bidStatus.hasRejectedBid 
+                        ? 'border-red-200 bg-red-50 opacity-60 cursor-not-allowed' 
+                        : 'border-gray-100'
+                    }`}>
+                      <div className="flex items-center p-5">
+                        <div className="relative w-20 h-20 flex-shrink-0">
+                          <Image
+                            src={tokenImagePath}
+                            alt="Liqwik Token"
+                            width={80}
+                            height={80}
+                            className="object-contain drop-shadow-lg"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="relative w-full h-full flex items-center justify-center">
+                              <div 
+                                className="absolute font-bold text-[9px]"
+                                style={{ 
+                                  top: '18%',
+                                  left: '50%',
+                                  transform: 'translateX(-50%)',
+                                  color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
+                                }}
+                              >
+                                {asset.termMonths || 0}
+                              </div>
+                              
+                              <div 
+                                className="absolute font-bold text-[11px]"
+                                style={{ 
+                                  top: '48%',
+                                  left: '58%',
+                                  transform: 'translateY(-50%)',
+                                  color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
+                                }}
+                              >
+                                {faceValueFirstTwo}
+                              </div>
+                              
+                              <div 
+                                className="absolute font-bold text-[9px]"
+                                style={{ 
+                                  bottom: '18%',
+                                  left: '50%',
+                                  transform: 'translateX(-50%)',
+                                  color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
+                                }}
+                              >
+                                {asset.apy ? asset.apy.toFixed(0) : '0'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="ml-5 flex-grow min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="font-bold text-lg text-gray-900 truncate">
+                              {asset.billToParty.name}
+                            </div>
+                            <span className="text-gray-400">•</span>
+                            <div className="text-sm font-medium text-gray-600">
+                              #{asset.invoiceNumber}
+                            </div>
+                          </div>
+                          
+                          <div className="flex flex-wrap items-center gap-3 text-sm">
+                            <div className="flex items-center gap-1.5">
+                              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="font-semibold text-gray-900">
+                                €{((asset.faceValueInCents || 0) / 100).toLocaleString()}
+                              </span>
+                            </div>
+                            
+                            <span className="text-gray-300">|</span>
+                            
+                            <div className="flex items-center gap-1.5">
+                              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="text-gray-700">
+                                {Math.abs(asset.numDaysForPayment || 0)} days
+                              </span>
+                            </div>
+
+                            <span className="text-gray-300">|</span>
+                            
+                            {/* Bid Status */}
+                            {bidStatus.hasRejectedBid ? (
+                              <div className="flex items-center gap-1.5 text-red-600 font-medium">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Bid Rejected</span>
+                              </div>
+                            ) : bidStatus.hasAcceptedBid ? (
+                              <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 text-green-600 font-medium">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span>Bid Accepted</span>
+                                </div>
+                                {countdown && (
+                                  <>
+                                    <span className="text-gray-300">•</span>
+                                    <div className={`flex items-center gap-1.5 font-mono text-xs font-semibold ${
+                                      countdown.completed
+                                        ? 'text-green-600 bg-green-50 px-2 py-1 rounded-full'
+                                        : countdown.expired 
+                                          ? 'text-red-600 bg-red-50 px-2 py-1 rounded-full' 
+                                          : countdown.urgent 
+                                            ? 'text-orange-600 bg-orange-50 px-2 py-1 rounded-full animate-pulse' 
+                                            : 'text-blue-600'
+                                    }`}>
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                      <span>{countdown.text}</span>
+                                    </div>
+                                    {bidStatus.paymentApprovedAt && (
+                                      <>
+                                        <span className="text-gray-300">•</span>
+                                        <span className="text-xs text-gray-500">
+                                          Paid {new Date(bidStatus.paymentApprovedAt).toLocaleDateString()}
+                                        </span>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            ) : bidStatus.pending > 0 ? (
+                              <div className="flex items-center gap-1.5 text-orange-600 font-medium">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Bid Pending</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-gray-500">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                                </svg>
+                                <span>No bid placed</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               );
             })
           ) : (

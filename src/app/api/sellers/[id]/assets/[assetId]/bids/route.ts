@@ -35,6 +35,7 @@ export async function POST(
             },
           },
         },
+        billToParty: true,
         bids: {
           include: {
             buyer: {
@@ -85,10 +86,52 @@ export async function POST(
         paymentDeadline: paymentDeadline,
         paymentApprovalToken: paymentApprovalToken,
         paymentApprovedByBuyer: false,
-        paymentApprovedAt: null
+        paymentApprovedAt: null,
+        rejected: false,
+        rejectedAt: null
       };
 
-      // Send email to buyer with payment approval link
+      // Update the accepted bid
+      await prisma.assetBid.update({
+        where: {
+          id: bidId,
+        },
+        data: update,
+      });
+
+      // Automatically reject all other bids for this asset
+      const otherBids = asset.bids.filter((b) => b.id !== bidId);
+      
+      if (otherBids.length > 0) {
+        await prisma.assetBid.updateMany({
+          where: {
+            assetId: assetId,
+            id: { not: bidId },
+            accepted: false,
+          },
+          data: {
+            rejected: true,
+            rejectedAt: new Date(),
+          },
+        });
+
+        // Send rejection notifications to all other buyers
+        for (const rejectedBid of otherBids) {
+          try {
+            await NotificationService.notifyBidRejected(
+              rejectedBid.buyer.contact.user.id,
+              asset.seller.name,
+              asset,
+              rejectedBid
+            );
+            console.log(`Rejection notification sent to buyer ${rejectedBid.buyer.contact.user.id}`);
+          } catch (notificationError) {
+            console.error("Failed to send bid rejection notification:", notificationError);
+          }
+        }
+      }
+
+      // Send email to accepted buyer with payment approval link
       const buyerEmail = bid.buyer.contact.user.email;
       const buyerName = bid.buyer.name || 
         `${bid.buyer.contact.user.firstName || ''} ${bid.buyer.contact.user.lastName || ''}`.trim() ||
@@ -114,7 +157,7 @@ export async function POST(
 
       console.log(`Bid acceptance email sent to ${buyerEmail} with payment approval token`);
 
-      // NEW: Send bell notifications to both buyer and seller
+      // Send bell notifications to both buyer and seller for accepted bid
       try {
         await NotificationService.notifyBidAccepted(
           bid.buyer.contact.user.id, // buyer user ID
@@ -130,6 +173,7 @@ export async function POST(
       }
 
     } else if (action === "cancel-accept") {
+      // When cancelling an acceptance, also unreject the other bids
       update = { 
         accepted: false, 
         acceptedAt: null,
@@ -138,12 +182,48 @@ export async function POST(
         paymentApprovedByBuyer: false,
         paymentApprovedAt: null
       };
+
+      await prisma.assetBid.update({
+        where: {
+          id: bidId,
+        },
+        data: update,
+      });
+
+      // Unreject other bids to allow seller to accept them again
+      await prisma.assetBid.updateMany({
+        where: {
+          assetId: assetId,
+          id: { not: bidId },
+          rejected: true,
+        },
+        data: {
+          rejected: false,
+          rejectedAt: null,
+        },
+      });
+
     } else if (action === "reject") {
+      // Manually reject a specific bid
+      update = {
+        rejected: true,
+        rejectedAt: new Date(),
+        accepted: false,
+        acceptedAt: null,
+      };
+
+      await prisma.assetBid.update({
+        where: {
+          id: bidId,
+        },
+        data: update,
+      });
+
       // Notify buyer about bid rejection
       try {
         await NotificationService.notifyBidRejected(
-          bid.buyer.contact.user.id, // buyer user ID
-          asset.seller.name, // seller name
+          bid.buyer.contact.user.id,
+          asset.seller.name,
           asset,
           bid
         );
@@ -153,13 +233,7 @@ export async function POST(
       }
     }
 
-    const updatedBid = await prisma.assetBid.update({
-      where: {
-        id: bidId,
-      },
-      data: update,
-    });
-
+    // Return all bids for this asset
     const bids = await prisma.assetBid.findMany({
       where: {
         assetId: assetId,
@@ -169,6 +243,18 @@ export async function POST(
           select: {
             id: true,
             name: true,
+            contact: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
