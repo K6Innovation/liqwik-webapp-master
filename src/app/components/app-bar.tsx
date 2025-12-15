@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { HiBars3BottomRight, HiBell } from "react-icons/hi2";
@@ -70,17 +70,8 @@ function AppBar({ openNav }: Props) {
     }
   }, [session]);
 
-  // Fetch notifications for current role ONLY
-  useEffect(() => {
-    if (userId && currentRole) {
-      fetchNotifications();
-      // Poll for new notifications every 30 seconds
-      const interval = setInterval(fetchNotifications, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [userId, currentRole]);
-
-  const fetchNotifications = async () => {
+  // Wrap fetchNotifications in useCallback
+  const fetchNotifications = useCallback(async () => {
     if (!userId || !currentRole) return;
     
     try {
@@ -95,7 +86,17 @@ function AppBar({ openNav }: Props) {
     } catch (error) {
       console.error("Failed to fetch notifications:", error);
     }
-  };
+  }, [userId, currentRole]);
+
+  // Fetch notifications for current role ONLY
+  useEffect(() => {
+    if (userId && currentRole) {
+      fetchNotifications();
+      // Poll for new notifications every 30 seconds
+      const interval = setInterval(fetchNotifications, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [userId, currentRole, fetchNotifications]);
 
   const markAsRead = async (notificationId: string) => {
     try {

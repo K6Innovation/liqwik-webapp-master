@@ -1,3 +1,5 @@
+// src/app/components/buyer/assets/marketplace.tsx
+
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -22,6 +24,7 @@ export default function MarketList({ assets = [] }: Props) {
   }, []);
 
   // Filter assets to show only fee-approved, posted, and non-cancelled ones with pending bids or no bids
+  // AND exclude assets with accepted bids (already sold)
   const filterAssetsWithPendingBids = (assetList: any[]) => {
     return assetList.filter(asset => {
       // Only show if fee is approved by seller
@@ -33,6 +36,9 @@ export default function MarketList({ assets = [] }: Props) {
       // Don't show if cancelled (isCancelled is true)
       if (asset.isCancelled) return false;
       
+      // NEW: Don't show if any bid has been accepted (asset is already sold)
+      if (asset.bids && asset.bids.some((bid: any) => bid.accepted)) return false;
+      
       // Show if no bids at all
       if (!asset.bids || asset.bids.length === 0) return true;
       
@@ -42,11 +48,14 @@ export default function MarketList({ assets = [] }: Props) {
     });
   };
 
-  // Get unique bill-to parties (only from fee-approved, posted, and non-cancelled assets)
+  // Get unique bill-to parties (only from fee-approved, posted, and non-cancelled assets without accepted bids)
   const getBillToParties = () => {
     const parties = new Set();
     const validAssets = assets.filter(asset => 
-      asset.feeApprovedBySeller && asset.isPosted && !asset.isCancelled
+      asset.feeApprovedBySeller && 
+      asset.isPosted && 
+      !asset.isCancelled &&
+      (!asset.bids || !asset.bids.some((bid: any) => bid.accepted))
     );
     validAssets.forEach(asset => {
       if (asset.billToParty && asset.billToParty.name) {
@@ -412,32 +421,6 @@ export default function MarketList({ assets = [] }: Props) {
                               </svg>
                               <span>No bids yet</span>
                             </div>
-                          ) : bidStatus.hasAcceptedBid ? (
-                            <div className="flex items-center gap-1.5">
-                              <div className="flex items-center gap-1.5 text-green-600 font-medium">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span>Bid Accepted</span>
-                              </div>
-                              {countdown && (
-                                <>
-                                  <span className="text-gray-300">•</span>
-                                  <div className={`flex items-center gap-1.5 font-mono text-xs font-semibold ${
-                                    countdown.expired 
-                                      ? 'text-red-600 bg-red-50 px-2 py-1 rounded-full' 
-                                      : countdown.urgent 
-                                        ? 'text-orange-600 bg-orange-50 px-2 py-1 rounded-full animate-pulse' 
-                                        : 'text-blue-600'
-                                  }`}>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <span>{countdown.text}</span>
-                                  </div>
-                                </>
-                              )}
-                            </div>
                           ) : bidStatus.pending > 0 ? (
                             <div className="flex items-center gap-1.5 text-orange-600 font-medium">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -474,7 +457,7 @@ export default function MarketList({ assets = [] }: Props) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
                 <h3 className="mt-4 text-lg font-semibold text-gray-900">No posted invoices available</h3>
-                <p className="mt-2 text-sm text-gray-500">Only posted invoices (fee-approved and not cancelled) with pending bids are shown in the marketplace.</p>
+                <p className="mt-2 text-sm text-gray-500">Only posted invoices without accepted bids are shown in the marketplace.</p>
               </div>
             </div>
           )}

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import { HiOutlineDownload, HiOutlineExternalLink, HiOutlineX } from "react-icons/hi";
 import { HiOutlineDocumentText } from "react-icons/hi2";
 
@@ -23,18 +24,8 @@ export default function DocumentViewer({ assetId, isOpen, onClose }: Props) {
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [previewError, setPreviewError] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && assetId) {
-      loadDocuments();
-    }
-  }, [isOpen, assetId]);
-
-  useEffect(() => {
-    // Reset preview error when document changes
-    setPreviewError(false);
-  }, [selectedDoc]);
-
-  const loadDocuments = async () => {
+  // Wrap loadDocuments in useCallback to fix dependency warning
+  const loadDocuments = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`/api/assets/${assetId}/documents`);
@@ -51,7 +42,18 @@ export default function DocumentViewer({ assetId, isOpen, onClose }: Props) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [assetId]);
+
+  useEffect(() => {
+    if (isOpen && assetId) {
+      loadDocuments();
+    }
+  }, [isOpen, assetId, loadDocuments]);
+
+  useEffect(() => {
+    // Reset preview error when document changes
+    setPreviewError(false);
+  }, [selectedDoc]);
 
   const handleViewDocument = (doc: Document) => {
     setSelectedDoc(doc);
@@ -137,17 +139,19 @@ export default function DocumentViewer({ assetId, isOpen, onClose }: Props) {
       );
     }
 
-    // Image Preview (PNG, JPG, JPEG)
+    // Image Preview (PNG, JPG, JPEG) - Using Next.js Image component
     if (["png", "jpg", "jpeg"].includes(ext || "")) {
       return (
         <div className="flex-1 border rounded-lg overflow-hidden bg-gray-50">
           {!previewError ? (
-            <div className="flex items-center justify-center h-full p-4">
-              <img
+            <div className="flex items-center justify-center h-full p-4 relative">
+              <Image
                 src={previewUrl}
                 alt={doc.name}
-                className="max-w-full max-h-full object-contain shadow-lg"
+                fill
+                className="object-contain"
                 onError={() => setPreviewError(true)}
+                unoptimized
               />
             </div>
           ) : (

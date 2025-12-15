@@ -1,7 +1,7 @@
 // src/app/components/buyer/payment-popup.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { X, AlertCircle, CheckCircle, Clock, Building2 } from "lucide-react";
 import Image from "next/image";
 
@@ -28,14 +28,8 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch pending payment assets
-  useEffect(() => {
-    if (isOpen && userId) {
-      fetchPendingAssets();
-    }
-  }, [isOpen, userId]);
-
-  const fetchPendingAssets = async () => {
+  // Wrap fetchPendingAssets in useCallback to fix dependency warning
+  const fetchPendingAssets = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/buyers/${userId}/assets?filterByBids=true`);
@@ -75,7 +69,14 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  // Fetch pending payment assets
+  useEffect(() => {
+    if (isOpen && userId) {
+      fetchPendingAssets();
+    }
+  }, [isOpen, userId, fetchPendingAssets]);
 
   const handleAssetClick = (asset: any) => {
     setSelectedAsset(asset);

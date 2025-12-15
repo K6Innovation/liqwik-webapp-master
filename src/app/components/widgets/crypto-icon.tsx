@@ -1,15 +1,16 @@
 import React from "react";
 import Image from "next/image";
+
 type Props = { color: string };
 
 export default function Loading({ color }: Props) {
   return (
-    <img
+    <Image
       src="/liqwik-icon-v1.png" 
       alt="Loading..."
+      width={56}
+      height={44}
       className="w-14 h-11"
-      width="20"
-      height="20"
     />
     // <svg
     //   xmlns="http://www.w3.org/2000/svg"

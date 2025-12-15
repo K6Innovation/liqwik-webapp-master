@@ -74,6 +74,7 @@ export default function BidForm({
   const [bidCopy, setBidCopy] = useState<any>(bid);
   const [apy, setApy] = useState<number>(0);
 
+  // Fix: Include asset.id in dependency array
   useEffect(() => {
     const amountPerUnit = bid?.centsPerUnit ? bid.centsPerUnit / 100 : 0;
     setBidCopy(
@@ -91,13 +92,14 @@ export default function BidForm({
             totalAmount: 0,
           }
     );
-  }, [bid]);
+  }, [bid, asset.id]);
 
   useEffect(() => {
     const apy = getAPY(asset, bidCopy);
     setApy(apy || 0);
   }, [bidCopy, asset]);
 
+  // Fix: Include asset.id in useMemo dependency array
   const onSubmit = useMemo(
     () =>
       async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -143,7 +145,7 @@ export default function BidForm({
           setIsLoading(false);
         }
       },
-    [session, bid, postSaveAction, setSaveStatus, setIsLoading]
+    [session, bid, postSaveAction, setSaveStatus, setIsLoading, asset.id]
   );
 
   const updateErrorFields = useMemo(

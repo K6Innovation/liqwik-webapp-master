@@ -7,18 +7,17 @@ type Props = {
 };
 
 const BuyerWallet = ({ bids = [] }: Props) => {
-  const currentDate = new Date();
-
   // Filter bids where payment is pending (green tokens)
   // Green: accepted bid, payment not confirmed, deadline not passed
   const pendingPaymentBids = useMemo(() => {
+    const currentDate = new Date();
     return bids.filter(bid => 
       bid.accepted === true &&
       bid.paymentApprovedByBuyer === false &&
       bid.paymentDeadline &&
       new Date(bid.paymentDeadline) > currentDate
     );
-  }, [bids, currentDate]);
+  }, [bids]);
 
   // Grey tokens: payment confirmed by buyer
   const paidBids = useMemo(() => {
