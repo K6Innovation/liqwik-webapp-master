@@ -93,10 +93,11 @@ export default function LiqwikList({ assets = [] }: Props) {
         rejected: 0,
         hasAcceptedBid: false, 
         hasRejectedBid: false,
+        isOverdue: false,
         paymentDeadline: null,
         paymentApproved: false,
         paymentApprovedAt: null,
-        canAccessAsset: true // Can access if no bids
+        canAccessAsset: true
       };
     }
     
@@ -114,16 +115,27 @@ export default function LiqwikList({ assets = [] }: Props) {
         rejected: 0,
         hasAcceptedBid: false,
         hasRejectedBid: false,
+        isOverdue: false,
         paymentDeadline: null,
         paymentApproved: false,
         paymentApprovedAt: null,
-        canAccessAsset: true // Can access to place bid
+        canAccessAsset: true
       };
     }
     
     // Check user's bid status
     const isAccepted = userBid.accepted;
     const isRejected = userBid.rejected;
+    const isOverdue = userBid.isOverdue || false;
+    
+    // Check if payment deadline has passed but not marked overdue yet
+    let effectiveOverdue = isOverdue;
+    if (isAccepted && !userBid.paymentApprovedByBuyer && userBid.paymentDeadline) {
+      const deadline = new Date(userBid.paymentDeadline);
+      if (currentTime > deadline) {
+        effectiveOverdue = true;
+      }
+    }
     
     return { 
       total: asset.bids.length, 
@@ -132,25 +144,30 @@ export default function LiqwikList({ assets = [] }: Props) {
       rejected: isRejected ? 1 : 0,
       hasAcceptedBid: isAccepted,
       hasRejectedBid: isRejected,
+      isOverdue: effectiveOverdue,
       paymentDeadline: userBid?.paymentDeadline || null,
       paymentApproved: userBid?.paymentApprovedByBuyer || false,
       paymentApprovedAt: userBid?.paymentApprovedAt || null,
-      canAccessAsset: !isRejected // Can't access if rejected
+      canAccessAsset: !effectiveOverdue // Cannot access if overdue
     };
   };
 
-  const getPaymentCountdown = (paymentDeadline: string | null, paymentApproved: boolean) => {
+  const getPaymentCountdown = (paymentDeadline: string | null, paymentApproved: boolean, isOverdue: boolean) => {
     if (!paymentDeadline) return null;
     
+    if (isOverdue) {
+      return { expired: true, text: "Contract Disabled", urgent: true, completed: false, isOverdue: true };
+    }
+    
     if (paymentApproved) {
-      return { expired: false, text: "Payment Confirmed", urgent: false, completed: true };
+      return { expired: false, text: "Payment Confirmed", urgent: false, completed: true, isOverdue: false };
     }
     
     const deadline = new Date(paymentDeadline);
     const diff = deadline.getTime() - currentTime.getTime();
     
     if (diff <= 0) {
-      return { expired: true, text: "Payment overdue", urgent: true, completed: false };
+      return { expired: true, text: "Contract Disabled", urgent: true, completed: false, isOverdue: true };
     }
     
     const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -160,7 +177,7 @@ export default function LiqwikList({ assets = [] }: Props) {
     const urgent = hours < 6;
     const text = `${hours}h ${minutes}m ${seconds}s`;
     
-    return { expired: false, text, urgent, completed: false };
+    return { expired: false, text, urgent, completed: false, isOverdue: false };
   };
 
   const selectAllParties = () => {
@@ -329,191 +346,197 @@ export default function LiqwikList({ assets = [] }: Props) {
             filteredAssets.map((asset) => {
               const bidStatus = getBidStatus(asset);
               const tokenColor = asset.feeApprovedBySeller ? 'gold' : 'copper';
-              const tokenImagePath = asset.feeApprovedBySeller 
-                ? "/Transparent-Gold-image.png" 
-                : "/Transparent-Copper-image.png";
+              const tokenImagePath = bidStatus.isOverdue 
+                ? "/Transparent-Black-image.png"
+                : asset.feeApprovedBySeller 
+                  ? "/Transparent-Gold-image.png" 
+                  : "/Transparent-Copper-image.png";
               const faceValueFirstTwo = getFaceValueFirstTwo(asset.faceValueInCents ? asset.faceValueInCents / 100 : 0);
-              const countdown = bidStatus.hasAcceptedBid ? getPaymentCountdown(bidStatus.paymentDeadline, bidStatus.paymentApproved) : null;
+              const countdown = bidStatus.hasAcceptedBid ? getPaymentCountdown(bidStatus.paymentDeadline, bidStatus.paymentApproved, bidStatus.isOverdue) : null;
               
-              // Determine if card should be clickable
               const isClickable = bidStatus.canAccessAsset;
+              const isOverdue = bidStatus.isOverdue;
               
               return (
                 <div key={asset.id} className="block">
                   {isClickable ? (
                     <Link href={`/assets/${asset.id}`}>
                       <div className={`bg-white rounded-xl shadow-md border overflow-hidden transition-all duration-300 ${
-                        bidStatus.hasRejectedBid 
-                          ? 'border-red-200 bg-red-50 opacity-60 cursor-not-allowed' 
+                        isOverdue
+                          ? 'border-red-300 opacity-60 cursor-not-allowed'
                           : 'border-gray-100 hover:shadow-xl hover:border-pink-200 transform hover:-translate-y-1 cursor-pointer'
                       }`}>
-                    <div className="flex items-center p-5">
-                      <div className="relative w-20 h-20 flex-shrink-0">
-                        <Image
-                          src={tokenImagePath}
-                          alt="Liqwik Token"
-                          width={80}
-                          height={80}
-                          className="object-contain drop-shadow-lg"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="relative w-full h-full flex items-center justify-center">
-                            <div 
-                              className="absolute font-bold text-[9px]"
-                              style={{ 
-                                top: '18%',
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
-                              }}
-                            >
-                              {asset.termMonths || 0}
-                            </div>
-                            
-                            <div 
-                              className="absolute font-bold text-[11px]"
-                              style={{ 
-                                top: '48%',
-                                left: '58%',
-                                transform: 'translateY(-50%)',
-                                color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
-                              }}
-                            >
-                              {faceValueFirstTwo}
-                            </div>
-                            
-                            <div 
-                              className="absolute font-bold text-[9px]"
-                              style={{ 
-                                bottom: '18%',
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
-                              }}
-                            >
-                              {asset.apy ? asset.apy.toFixed(0) : '0'}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="ml-5 flex-grow min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="font-bold text-lg text-gray-900 truncate">
-                            {asset.billToParty.name}
-                          </div>
-                          <span className="text-gray-400">•</span>
-                          <div className="text-sm font-medium text-gray-600">
-                            #{asset.invoiceNumber}
-                          </div>
-                        </div>
-                        
-                        <div className="flex flex-wrap items-center gap-3 text-sm">
-                          <div className="flex items-center gap-1.5">
-                            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span className="font-semibold text-gray-900">
-                              €{((asset.faceValueInCents || 0) / 100).toLocaleString()}
-                            </span>
-                          </div>
-                          
-                          <span className="text-gray-300">|</span>
-                          
-                          <div className="flex items-center gap-1.5">
-                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span className="text-gray-700">
-                              {Math.abs(asset.numDaysForPayment || 0)} days
-                            </span>
-                          </div>
-
-                          <span className="text-gray-300">|</span>
-                          
-                          {/* Bid Status */}
-                          {bidStatus.hasRejectedBid ? (
-                            <div className="flex items-center gap-1.5 text-red-600 font-medium">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span>Bid Rejected</span>
-                            </div>
-                          ) : bidStatus.hasAcceptedBid ? (
-                            <div className="flex items-center gap-1.5">
-                              <div className="flex items-center gap-1.5 text-green-600 font-medium">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span>Bid Accepted</span>
+                        <div className="flex items-center p-5">
+                          <div className="relative w-20 h-20 flex-shrink-0">
+                            <Image
+                              src={tokenImagePath}
+                              alt="Liqwik Token"
+                              width={80}
+                              height={80}
+                              className="object-contain drop-shadow-lg"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="relative w-full h-full flex items-center justify-center">
+                                <div 
+                                  className="absolute font-bold text-[9px]"
+                                  style={{ 
+                                    top: '18%',
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    color: isOverdue ? '#000000' : (tokenColor === 'gold' ? '#D4AF37' : '#B87333')
+                                  }}
+                                >
+                                  {asset.termMonths || 0}
+                                </div>
+                                
+                                <div 
+                                  className="absolute font-bold text-[11px]"
+                                  style={{ 
+                                    top: '48%',
+                                    left: '58%',
+                                    transform: 'translateY(-50%)',
+                                    color: isOverdue ? '#000000' : (tokenColor === 'gold' ? '#D4AF37' : '#B87333')
+                                  }}
+                                >
+                                  {faceValueFirstTwo}
+                                </div>
+                                
+                                <div 
+                                  className="absolute font-bold text-[9px]"
+                                  style={{ 
+                                    bottom: '18%',
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    color: isOverdue ? '#000000' : (tokenColor === 'gold' ? '#D4AF37' : '#B87333')
+                                  }}
+                                >
+                                  {asset.apy ? asset.apy.toFixed(0) : '0'}
+                                </div>
                               </div>
-                              {countdown && (
+                            </div>
+                          </div>
+                          
+                          <div className="ml-5 flex-grow min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className={`font-bold text-lg truncate ${isOverdue ? 'text-gray-500' : 'text-gray-900'}`}>
+                                {asset.billToParty.name}
+                              </div>
+                              <span className="text-gray-400">•</span>
+                              <div className={`text-sm font-medium ${isOverdue ? 'text-gray-400' : 'text-gray-600'}`}>
+                                #{asset.invoiceNumber}
+                              </div>
+                              {isOverdue && (
                                 <>
-                                  <span className="text-gray-300">•</span>
-                                  <div className={`flex items-center gap-1.5 font-mono text-xs font-semibold ${
-                                    countdown.completed
-                                      ? 'text-green-600 bg-green-50 px-2 py-1 rounded-full'
-                                      : countdown.expired 
-                                        ? 'text-red-600 bg-red-50 px-2 py-1 rounded-full' 
-                                        : countdown.urgent 
-                                          ? 'text-orange-600 bg-orange-50 px-2 py-1 rounded-full animate-pulse' 
-                                          : 'text-blue-600'
-                                  }`}>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <span>{countdown.text}</span>
-                                  </div>
-                                  {bidStatus.paymentApprovedAt && (
-                                    <>
-                                      <span className="text-gray-300">•</span>
-                                      <span className="text-xs text-gray-500">
-                                        Paid {new Date(bidStatus.paymentApprovedAt).toLocaleDateString()}
-                                      </span>
-                                    </>
-                                  )}
+                                  <span className="text-gray-400">•</span>
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                    Contract Disabled
+                                  </span>
                                 </>
                               )}
                             </div>
-                          ) : bidStatus.pending > 0 ? (
-                            <div className="flex items-center gap-1.5 text-orange-600 font-medium">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span>Bid Pending</span>
+                            
+                            <div className="flex flex-wrap items-center gap-3 text-sm">
+                              <div className="flex items-center gap-1.5">
+                                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className={`font-semibold ${isOverdue ? 'text-gray-500' : 'text-gray-900'}`}>
+                                  €{((asset.faceValueInCents || 0) / 100).toLocaleString()}
+                                </span>
+                              </div>
+                              
+                              <span className="text-gray-300">|</span>
+                              
+                              <div className="flex items-center gap-1.5">
+                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className={isOverdue ? 'text-gray-500' : 'text-gray-700'}>
+                                  {Math.abs(asset.numDaysForPayment || 0)} days
+                                </span>
+                              </div>
+
+                              <span className="text-gray-300">|</span>
+                              
+                              {/* Bid Status */}
+                              {isOverdue ? (
+                                <div className="flex items-center gap-1.5 text-red-600 font-medium">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span>Payment Overdue</span>
+                                </div>
+                              ) : bidStatus.hasAcceptedBid ? (
+                                <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1.5 text-green-600 font-medium">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span>Bid Accepted</span>
+                                  </div>
+                                  {countdown && (
+                                    <>
+                                      <span className="text-gray-300">•</span>
+                                      <div className={`flex items-center gap-1.5 font-mono text-xs font-semibold ${
+                                        countdown.completed
+                                          ? 'text-green-600 bg-green-50 px-2 py-1 rounded-full'
+                                          : countdown.expired 
+                                            ? 'text-red-600 bg-red-50 px-2 py-1 rounded-full' 
+                                            : countdown.urgent 
+                                              ? 'text-orange-600 bg-orange-50 px-2 py-1 rounded-full animate-pulse' 
+                                              : 'text-blue-600'
+                                      }`}>
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span>{countdown.text}</span>
+                                      </div>
+                                      {bidStatus.paymentApprovedAt && (
+                                        <>
+                                          <span className="text-gray-300">•</span>
+                                          <span className="text-xs text-gray-500">
+                                            Paid {new Date(bidStatus.paymentApprovedAt).toLocaleDateString()}
+                                          </span>
+                                        </>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              ) : bidStatus.pending > 0 ? (
+                                <div className="flex items-center gap-1.5 text-orange-600 font-medium">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span>Bid Pending</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 text-gray-500">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                                  </svg>
+                                  <span>No bid placed</span>
+                                </div>
+                              )}
                             </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5 text-gray-500">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                          </div>
+                          
+                          {!isOverdue && (
+                            <div className="text-pink-500 flex-shrink-0 ml-4">
+                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                               </svg>
-                              <span>No bid placed</span>
                             </div>
                           )}
                         </div>
                       </div>
-                      
-                      {isClickable && (
-                        <div className="text-pink-500 flex-shrink-0 ml-4">
-                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                  </div>
                     </Link>
                   ) : (
-                    <div className={`bg-white rounded-xl shadow-md border overflow-hidden transition-all duration-300 ${
-                      bidStatus.hasRejectedBid 
-                        ? 'border-red-200 bg-red-50 opacity-60 cursor-not-allowed' 
-                        : 'border-gray-100'
-                    }`}>
+                    <div className="bg-white rounded-xl shadow-md border border-red-300 overflow-hidden opacity-60 cursor-not-allowed">
                       <div className="flex items-center p-5">
                         <div className="relative w-20 h-20 flex-shrink-0">
                           <Image
-                            src={tokenImagePath}
-                            alt="Liqwik Token"
+                            src="/Transparent-Black-image.png"
+                            alt="Disabled Token"
                             width={80}
                             height={80}
                             className="object-contain drop-shadow-lg"
@@ -526,7 +549,7 @@ export default function LiqwikList({ assets = [] }: Props) {
                                   top: '18%',
                                   left: '50%',
                                   transform: 'translateX(-50%)',
-                                  color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
+                                  color: '#000000'
                                 }}
                               >
                                 {asset.termMonths || 0}
@@ -538,7 +561,7 @@ export default function LiqwikList({ assets = [] }: Props) {
                                   top: '48%',
                                   left: '58%',
                                   transform: 'translateY(-50%)',
-                                  color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
+                                  color: '#000000'
                                 }}
                               >
                                 {faceValueFirstTwo}
@@ -550,7 +573,7 @@ export default function LiqwikList({ assets = [] }: Props) {
                                   bottom: '18%',
                                   left: '50%',
                                   transform: 'translateX(-50%)',
-                                  color: tokenColor === 'gold' ? '#D4AF37' : '#B87333'
+                                  color: '#000000'
                                 }}
                               >
                                 {asset.apy ? asset.apy.toFixed(0) : '0'}
@@ -561,13 +584,17 @@ export default function LiqwikList({ assets = [] }: Props) {
                         
                         <div className="ml-5 flex-grow min-w-0">
                           <div className="flex items-center gap-2 mb-2">
-                            <div className="font-bold text-lg text-gray-900 truncate">
+                            <div className="font-bold text-lg text-gray-500 truncate">
                               {asset.billToParty.name}
                             </div>
                             <span className="text-gray-400">•</span>
-                            <div className="text-sm font-medium text-gray-600">
+                            <div className="text-sm font-medium text-gray-400">
                               #{asset.invoiceNumber}
                             </div>
+                            <span className="text-gray-400">•</span>
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              Contract Disabled
+                            </span>
                           </div>
                           
                           <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -575,7 +602,7 @@ export default function LiqwikList({ assets = [] }: Props) {
                               <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              <span className="font-semibold text-gray-900">
+                              <span className="font-semibold text-gray-500">
                                 €{((asset.faceValueInCents || 0) / 100).toLocaleString()}
                               </span>
                             </div>
@@ -586,72 +613,19 @@ export default function LiqwikList({ assets = [] }: Props) {
                               <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              <span className="text-gray-700">
+                              <span className="text-gray-500">
                                 {Math.abs(asset.numDaysForPayment || 0)} days
                               </span>
                             </div>
 
                             <span className="text-gray-300">|</span>
                             
-                            {/* Bid Status */}
-                            {bidStatus.hasRejectedBid ? (
-                              <div className="flex items-center gap-1.5 text-red-600 font-medium">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span>Bid Rejected</span>
-                              </div>
-                            ) : bidStatus.hasAcceptedBid ? (
-                              <div className="flex items-center gap-1.5">
-                                <div className="flex items-center gap-1.5 text-green-600 font-medium">
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                  <span>Bid Accepted</span>
-                                </div>
-                                {countdown && (
-                                  <>
-                                    <span className="text-gray-300">•</span>
-                                    <div className={`flex items-center gap-1.5 font-mono text-xs font-semibold ${
-                                      countdown.completed
-                                        ? 'text-green-600 bg-green-50 px-2 py-1 rounded-full'
-                                        : countdown.expired 
-                                          ? 'text-red-600 bg-red-50 px-2 py-1 rounded-full' 
-                                          : countdown.urgent 
-                                            ? 'text-orange-600 bg-orange-50 px-2 py-1 rounded-full animate-pulse' 
-                                            : 'text-blue-600'
-                                    }`}>
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                      </svg>
-                                      <span>{countdown.text}</span>
-                                    </div>
-                                    {bidStatus.paymentApprovedAt && (
-                                      <>
-                                        <span className="text-gray-300">•</span>
-                                        <span className="text-xs text-gray-500">
-                                          Paid {new Date(bidStatus.paymentApprovedAt).toLocaleDateString()}
-                                        </span>
-                                      </>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            ) : bidStatus.pending > 0 ? (
-                              <div className="flex items-center gap-1.5 text-orange-600 font-medium">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span>Bid Pending</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5 text-gray-500">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                                </svg>
-                                <span>No bid placed</span>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-1.5 text-red-600 font-medium">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span>Payment Overdue</span>
+                            </div>
                           </div>
                         </div>
                       </div>

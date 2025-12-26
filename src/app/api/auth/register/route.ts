@@ -1,18 +1,16 @@
-// src/app/api/auth/register/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcrypt";
 import prisma from "@/utils/prisma-client";
+import bcrypt from "bcrypt";
 import { emailService } from "@/utils/email-service";
-import crypto from "crypto";
 
 // Generate a 6-digit verification code
 function generateVerificationCode(): string {
-  return crypto.randomInt(100000, 999999).toString();
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await req.json();
     const {
       firstName,
       lastName,
@@ -24,8 +22,8 @@ export async function POST(request: NextRequest) {
       role,
       organizationName,
       address,
-      
-      // KYB Fields for Seller
+      billToParties,
+      // Seller KYB fields
       legalBusinessName,
       registrationNumber,
       taxIdentificationNumber,
@@ -41,8 +39,7 @@ export async function POST(request: NextRequest) {
       listOfDirectors,
       ultimateBeneficialOwners,
       shareholdingStructure,
-      
-      // KYB / Company Information for Buyer
+      // Buyer fields
       companyName,
       businessRegistrationNumber,
       billingAddress,
@@ -54,34 +51,21 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validate required fields
-    if (!firstName || !lastName || !username || !email || !password || !role || !organizationName || !address) {
+    if (!email || !username || !password || !firstName || !lastName || !role) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: "Invalid email format" },
-        { status: 400 }
-      );
-    }
+    // Find or create role
+    const roleRecord = await prisma.role.findFirst({
+      where: { name: role },
+    });
 
-    // Validate password strength
-    if (password.length < 8) {
+    if (!roleRecord) {
       return NextResponse.json(
-        { error: "Password must be at least 8 characters long" },
-        { status: 400 }
-      );
-    }
-
-    // Validate role
-    if (!['seller', 'buyer'].includes(role)) {
-      return NextResponse.json(
-        { error: "Invalid role. Must be 'seller' or 'buyer'" },
+        { error: `Role '${role}' not found` },
         { status: 400 }
       );
     }
@@ -89,100 +73,73 @@ export async function POST(request: NextRequest) {
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
       where: {
-        OR: [
-          { email: email },
-          { username: username }
-        ]
+        OR: [{ email }, { username }],
       },
       include: {
         roles: {
           include: {
-            role: true
-          }
-        }
-      }
+            role: true,
+          },
+        },
+      },
     });
 
-    // Get role record
-    const roleRecord = await prisma.role.findUnique({
-      where: { name: role }
-    });
-
-    if (!roleRecord) {
-      return NextResponse.json(
-        { error: "Invalid role specified" },
-        { status: 400 }
-      );
-    }
-
-    let result;
-    let userRoleId;
+    let user: any;
+    let userRole: any;
+    let roleVerificationCode: string;
     let isNewUser = false;
 
-    // If user exists with same email/username
     if (existingUser) {
       // Check if user already has this role
       const hasRole = existingUser.roles.some(
-        (r: any) => r.role.name === role
+        (ur) => ur.role.name === role
       );
 
       if (hasRole) {
         return NextResponse.json(
-          { error: `You already have a ${role} account with this email` },
-          { status: 409 }
+          { error: `You are already registered as a ${role}` },
+          { status: 400 }
         );
       }
 
-      // Check if organization name already exists for this role
-      if (role === "seller") {
-        const existingSeller = await prisma.assetSeller.findUnique({
-          where: { name: organizationName }
-        });
-        if (existingSeller) {
-          return NextResponse.json(
-            { error: "Organization name already exists for sellers" },
-            { status: 409 }
-          );
-        }
-      } else if (role === "buyer") {
-        const existingBuyer = await prisma.assetBuyer.findUnique({
-          where: { name: organizationName }
-        });
-        if (existingBuyer) {
-          return NextResponse.json(
-            { error: "Organization name already exists for buyers" },
-            { status: 409 }
-          );
-        }
+      // Verify password matches
+      const validPassword = await bcrypt.compare(
+        password,
+        existingUser.hashedPassword
+      );
+
+      if (!validPassword) {
+        return NextResponse.json(
+          { error: "Invalid password. Please use the same password you registered with." },
+          { status: 400 }
+        );
       }
 
-      // Generate verification code for the new role
-      const verificationCode = generateVerificationCode();
-      const expireDate = new Date();
-      expireDate.setMinutes(expireDate.getMinutes() + 15); // 15 minutes expiry
-
       // Add new role to existing user
-      result = await prisma.$transaction(async (tx) => {
+      user = existingUser;
+
+      const result = await prisma.$transaction(async (tx) => {
         // Create UserRole with verification code
-        const userRole = await tx.userRole.create({
+        const newRoleVerificationCode = generateVerificationCode();
+        const roleVerificationExpireDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        const newUserRole = await tx.userRole.create({
           data: {
-            userId: existingUser.id,
+            userId: user.id,
             roleId: roleRecord.id,
             isRoleVerified: false,
-            roleVerificationCode: verificationCode,
-            roleVerificationExpireDate: expireDate,
+            roleVerificationCode: newRoleVerificationCode,
+            roleVerificationExpireDate,
           },
         });
 
-        userRoleId = userRole.id;
-
-        // Create role-specific entity
+        // Create organization based on role
         if (role === "seller") {
           await tx.assetSeller.create({
             data: {
               name: organizationName,
               address,
-              contactId: userRole.id,
+              contactId: newUserRole.id,
               legalBusinessName,
               registrationNumber,
               taxIdentificationNumber,
@@ -200,12 +157,29 @@ export async function POST(request: NextRequest) {
               shareholdingStructure,
             },
           });
+
+          // Create bill-to-parties if provided
+          if (billToParties && Array.isArray(billToParties) && billToParties.length > 0) {
+            for (const btp of billToParties) {
+              if (btp.name && btp.email && btp.address) {
+                await tx.billToParty.create({
+                  data: {
+                    name: btp.name,
+                    email: btp.email,
+                    address: btp.address,
+                    contactId: newUserRole.id,
+                    createdByUserId: user.id,
+                  },
+                });
+              }
+            }
+          }
         } else if (role === "buyer") {
           await tx.assetBuyer.create({
             data: {
               name: organizationName,
               address,
-              contactId: userRole.id,
+              contactId: newUserRole.id,
               companyName,
               businessType,
               industrySector,
@@ -221,158 +195,168 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        return existingUser;
+        return { userRole: newUserRole, roleVerificationCode: newRoleVerificationCode };
       });
 
-      // Send role verification email
-      try {
-        await emailService.sendVerificationEmail(email, verificationCode, firstName);
-      } catch (emailError) {
-        console.error("Failed to send verification email:", emailError);
-      }
+      userRole = result.userRole;
+      roleVerificationCode = result.roleVerificationCode;
 
-      return NextResponse.json({
-        message: `${role} role added successfully! Please verify your email for this role.`,
-        userId: result.id,
-        userRoleId: userRoleId,
-        email: email,
-        firstName: firstName,
-        role: role,
-        requiresVerification: true,
-        redirectTo: `/auth/verify-email?email=${encodeURIComponent(email)}&firstName=${encodeURIComponent(firstName)}&role=${role}&userRoleId=${userRoleId}`
-      }, { status: 201 });
-    }
+    } else {
+      // Create new user
+      isNewUser = true;
 
-    // Check if organization name already exists
-    if (role === "seller") {
-      const existingSeller = await prisma.assetSeller.findUnique({
-        where: { name: organizationName }
-      });
-      if (existingSeller) {
-        return NextResponse.json(
-          { error: "Organization name already exists for sellers" },
-          { status: 409 }
-        );
-      }
-    } else if (role === "buyer") {
-      const existingBuyer = await prisma.assetBuyer.findUnique({
-        where: { name: organizationName }
-      });
-      if (existingBuyer) {
-        return NextResponse.json(
-          { error: "Organization name already exists for buyers" },
-          { status: 409 }
-        );
-      }
-    }
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
+      // Generate verification codes
+      const userVerificationCode = generateVerificationCode();
+      const userVerificationExpireDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    // Generate verification code for the new user
-    const verificationCode = generateVerificationCode();
-    const expireDate = new Date();
-    expireDate.setMinutes(expireDate.getMinutes() + 15); // 15 minutes expiry
-
-    // Create new user with role
-    isNewUser = true;
-    result = await prisma.$transaction(async (tx) => {
-      const newUser = await tx.user.create({
-        data: {
-          firstName,
-          lastName,
-          middleName,
-          username,
-          email,
-          phone,
-          hashedPassword,
-          isEmailVerified: false,
-          verificationCode: verificationCode,
-          verificationCodeExpireDate: expireDate,
-        },
-      });
-
-      const userRole = await tx.userRole.create({
-        data: {
-          userId: newUser.id,
-          roleId: roleRecord.id,
-          isRoleVerified: false,
-          roleVerificationCode: verificationCode,
-          roleVerificationExpireDate: expireDate,
-        },
-      });
-
-      userRoleId = userRole.id;
-
-      if (role === "seller") {
-        await tx.assetSeller.create({
+      const result = await prisma.$transaction(async (tx) => {
+        // Create user
+        const newUser = await tx.user.create({
           data: {
-            name: organizationName,
-            address,
-            contactId: userRole.id,
-            legalBusinessName,
-            registrationNumber,
-            taxIdentificationNumber,
-            businessType,
-            industrySector,
-            dateOfIncorporation: dateOfIncorporation ? new Date(dateOfIncorporation) : null,
-            businessBankAccountDetails,
-            authorizedSignatoryDetails,
-            countryOfIncorporation,
-            registeredBusinessAddress,
-            operatingAddress,
-            websiteUrl,
-            listOfDirectors,
-            ultimateBeneficialOwners,
-            shareholdingStructure,
+            email,
+            username,
+            hashedPassword,
+            firstName,
+            lastName,
+            middleName,
+            phone,
+            verificationCode: userVerificationCode,
+            verificationCodeExpireDate: userVerificationExpireDate,
+            isEmailVerified: false,
           },
         });
-      } else if (role === "buyer") {
-        await tx.assetBuyer.create({
+
+        // Create UserRole with verification code
+        const newRoleVerificationCode = generateVerificationCode();
+        const roleVerificationExpireDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        const newUserRole = await tx.userRole.create({
           data: {
-            name: organizationName,
-            address,
-            contactId: userRole.id,
-            companyName,
-            businessType,
-            industrySector,
-            businessRegistrationNumber,
-            taxIdentificationNumber,
-            billingAddress,
-            shippingAddress,
-            companyWebsite,
-            preferredPaymentMethod,
-            bankDetails,
-            purchaseOrderNumber,
+            userId: newUser.id,
+            roleId: roleRecord.id,
+            isRoleVerified: false,
+            roleVerificationCode: newRoleVerificationCode,
+            roleVerificationExpireDate,
           },
         });
-      }
 
-      return newUser;
-    });
+        // Create organization based on role
+        if (role === "seller") {
+          await tx.assetSeller.create({
+            data: {
+              name: organizationName,
+              address,
+              contactId: newUserRole.id,
+              legalBusinessName,
+              registrationNumber,
+              taxIdentificationNumber,
+              businessType,
+              industrySector,
+              dateOfIncorporation: dateOfIncorporation ? new Date(dateOfIncorporation) : null,
+              businessBankAccountDetails,
+              authorizedSignatoryDetails,
+              countryOfIncorporation,
+              registeredBusinessAddress,
+              operatingAddress,
+              websiteUrl,
+              listOfDirectors,
+              ultimateBeneficialOwners,
+              shareholdingStructure,
+            },
+          });
 
-    // Send verification email
+          // Create bill-to-parties if provided
+          if (billToParties && Array.isArray(billToParties) && billToParties.length > 0) {
+            for (const btp of billToParties) {
+              if (btp.name && btp.email && btp.address) {
+                await tx.billToParty.create({
+                  data: {
+                    name: btp.name,
+                    email: btp.email,
+                    address: btp.address,
+                    contactId: newUserRole.id,
+                    createdByUserId: newUser.id,
+                  },
+                });
+              }
+            }
+          }
+        } else if (role === "buyer") {
+          await tx.assetBuyer.create({
+            data: {
+              name: organizationName,
+              address,
+              contactId: newUserRole.id,
+              companyName,
+              businessType,
+              industrySector,
+              businessRegistrationNumber,
+              taxIdentificationNumber,
+              billingAddress,
+              shippingAddress,
+              companyWebsite,
+              preferredPaymentMethod,
+              bankDetails,
+              purchaseOrderNumber,
+            },
+          });
+        }
+
+        return { user: newUser, userRole: newUserRole, roleVerificationCode: newRoleVerificationCode };
+      });
+
+      user = result.user;
+      userRole = result.userRole;
+      roleVerificationCode = result.roleVerificationCode;
+    }
+
+    // Send verification email AFTER successful registration
     try {
-      await emailService.sendVerificationEmail(email, verificationCode, firstName);
+      await emailService.sendVerificationEmail(
+        email,
+        roleVerificationCode,
+        firstName
+      );
+      console.log(`Verification email sent successfully to ${email}`);
     } catch (emailError) {
       console.error("Failed to send verification email:", emailError);
     }
 
-    return NextResponse.json({
-      message: "Registration successful! Please check your email for verification code.",
-      userId: result.id,
-      userRoleId: userRoleId,
-      email: email,
-      firstName: firstName,
-      role: role,
-      requiresVerification: true,
-      redirectTo: `/auth/verify-email?email=${encodeURIComponent(email)}&firstName=${encodeURIComponent(firstName)}&role=${role}&userRoleId=${userRoleId}`
-    }, { status: 201 });
+    const message = isNewUser
+      ? "Registration successful. Please check your email for verification code."
+      : `${role.charAt(0).toUpperCase() + role.slice(1)} role added successfully. Please check your email for verification code.`;
 
-  } catch (error) {
+    return NextResponse.json({
+      message,
+      email: user.email,
+      firstName: user.firstName,
+      role,
+      userRoleId: userRole.id,
+      isNewUser,
+    });
+  } catch (error: any) {
     console.error("Registration error:", error);
+    
+    if (error.code === "P2002") {
+      // Get the target field from the error
+      const target = error.meta?.target?.[0];
+      if (target === "name") {
+        return NextResponse.json(
+          { error: "An organization with this name already exists" },
+          { status: 400 }
+        );
+      }
+      return NextResponse.json(
+        { error: "A record with this information already exists" },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error.message || "Registration failed" },
       { status: 500 }
     );
   }

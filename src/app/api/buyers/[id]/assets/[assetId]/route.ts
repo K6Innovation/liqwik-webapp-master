@@ -1,4 +1,5 @@
 // src/app/api/buyers/[id]/assets/[assetId]/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/utils/prisma-client";
 import dayjs from "dayjs";
@@ -56,7 +57,6 @@ export async function GET(
     throw new CustomError("User is not associated with an Asset Buyer", 400);
   }
   
-  // Fetch the asset with all necessary fields including file paths
   const asset: any = await prisma.asset.findUnique({
     where: {
       id: assetId,
@@ -75,9 +75,17 @@ export async function GET(
     throw new CustomError("Asset not found", 404);
   }
 
-  // Get bids for this asset
   const bids = await getAssetBids(assetId);
   asset.bids = bids;
+  
+  // Add helper flags
+  const hasOverdueBid = asset.bids.some((bid: any) => bid.isOverdue);
+  const hasActiveAcceptedBid = asset.bids.some(
+    (bid: any) => bid.accepted && !bid.isOverdue
+  );
+  
+  asset.hasOverdueBid = hasOverdueBid;
+  asset.canAcceptOtherBids = hasOverdueBid && !hasActiveAcceptedBid;
   
   return NextResponse.json(asset);
 }
@@ -92,28 +100,34 @@ export async function POST(
     if (userOrgs.length === 0) {
       throw new CustomError("User is not associated with an Asset Buyer", 400);
     }
+    
     const formData = await req.formData();
     const assetId = formData.get("id") as string;
     if (!assetId) {
       throw new CustomError("Asset Id is required", 400);
     }
+    
     const faceValueInCents =
       parseInt((formData.get("faceValue") || "") as string) * 100;
     if (faceValueInCents && isNaN(faceValueInCents)) {
       throw new CustomError("INVALID_REQUEST", 400);
     }
+    
     const invoiceDate = formData.get("invoiceDate") as string;
     if (!invoiceDate) {
       throw new CustomError("Invoice Date is required", 400);
     }
+    
     const paymentDate = formData.get("paymentDate") as string;
     if (!paymentDate) {
       throw new CustomError("Payment Date is required", 400);
     }
+    
     const bidClosingDate = formData.get("bidClosingDate") as string;
     if (!bidClosingDate) {
       throw new CustomError("Bid Closing Date is required", 400);
     }
+    
     const seller = await prisma.assetSeller.findFirst({
       where: {
         id: userOrgs[0].id,
@@ -122,6 +136,7 @@ export async function POST(
     if (!seller) {
       throw new CustomError("Seller not found", 400);
     }
+    
     const billToPartyId = formData.get("billToPartyId") as string;
     const billToParty = await prisma.billToParty.findFirst({
       where: {
@@ -131,6 +146,7 @@ export async function POST(
     if (!billToParty) {
       throw new CustomError("Bill To Party not found", 400);
     }
+    
     const assetData: any = {
       invoiceNumber: formData.get("invoiceNumber"),
       invoiceDate: dayjs(invoiceDate).toDate(),
@@ -139,6 +155,7 @@ export async function POST(
       auctionedUnits: parseInt(formData.get("auctionedUnits") as string),
       bidClosingDate: dayjs(bidClosingDate).toDate(),
     };
+    
     const updatedAsset: any = await prisma.asset.update({
       where: {
         id: assetId,
@@ -153,7 +170,18 @@ export async function POST(
       },
       ...assetIncludes,
     });
+    
     updatedAsset.bids = await getAssetBids(assetId);
+    
+    // Add helper flags
+    const hasOverdueBid = updatedAsset.bids.some((bid: any) => bid.isOverdue);
+    const hasActiveAcceptedBid = updatedAsset.bids.some(
+      (bid: any) => bid.accepted && !bid.isOverdue
+    );
+    
+    updatedAsset.hasOverdueBid = hasOverdueBid;
+    updatedAsset.canAcceptOtherBids = hasOverdueBid && !hasActiveAcceptedBid;
+    
     return NextResponse.json(updatedAsset);
   } catch (error: any) {
     console.error("Error updating asset:", error);

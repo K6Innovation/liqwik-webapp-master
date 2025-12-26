@@ -29,17 +29,26 @@ export default function BidItem({ asset, bid = {}, bidAction }: Props) {
     setFractionDisc(fractionDisc);
   }, [asset, bid]);
 
-  // Check if any bid has been accepted for this asset
-  const hasAcceptedBid = asset.bids?.some((b: any) => b.accepted && b.id !== bid.id);
-  const isThisBidAccepted = bid.accepted;
+  // Check if any NON-OVERDUE bid has been accepted for this asset
+  const hasActiveAcceptedBid = asset.bids?.some((b: any) => 
+    b.accepted && !b.isOverdue && b.id !== bid.id
+  );
+  
+  const isThisBidAccepted = bid.accepted && !bid.isOverdue;
   const isRejected = bid.rejected;
+  const isOverdue = bid.isOverdue;
 
-  // Disable accept button if another bid is already accepted
-  const isDisabled = hasAcceptedBid && !isThisBidAccepted;
+  // Disable accept button if:
+  // 1. Another non-overdue bid is already accepted, OR
+  // 2. This bid is overdue (can't re-accept overdue bids)
+  const isDisabled = (hasActiveAcceptedBid && !isThisBidAccepted) || isOverdue;
 
   return (
     <tr className={`border-t w-full shadow-lg border border-gray-200 rounded-2xl p-6 ${
-      isRejected ? 'bg-red-50 opacity-60' : isThisBidAccepted ? 'bg-green-50' : 'bg-white'
+      isOverdue ? 'bg-orange-50 opacity-70' :
+      isRejected ? 'bg-red-50 opacity-60' : 
+      isThisBidAccepted ? 'bg-green-50' : 
+      'bg-white'
     }`}>
       <td className="py-2 text-sm text-gray-600">{bid.buyer.name}</td>
       <td className="py-2 font-semibold">€{bidAmount}</td>
@@ -47,7 +56,9 @@ export default function BidItem({ asset, bid = {}, bidAction }: Props) {
       <td className="py-2 text-gray-600 italic">{fractionDisc.toFixed(2)}%</td>
       <td className="py-2 text-gray-600 italic">{apy}%</td>
       <td className="py-2 text-gray-400">
-        {isRejected ? (
+        {isOverdue ? (
+          <span className="text-xs text-orange-600 font-semibold">Payment Overdue</span>
+        ) : isRejected ? (
           <span className="text-xs text-red-600 font-semibold">Rejected</span>
         ) : (
           <AcceptButton

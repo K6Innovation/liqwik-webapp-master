@@ -74,6 +74,40 @@ export async function POST(
     let update: any;
     
     if (action === "accept") {
+      // Check if there's already an accepted bid that's not overdue
+      const existingAcceptedBid = asset.bids.find((b) => 
+        b.accepted && !b.isOverdue && b.id !== bidId
+      );
+
+      if (existingAcceptedBid) {
+        // Check if the existing bid is actually overdue (deadline passed)
+        if (existingAcceptedBid.paymentDeadline && 
+            new Date() > new Date(existingAcceptedBid.paymentDeadline) &&
+            !existingAcceptedBid.paymentApprovedByBuyer) {
+          // Mark the existing bid as overdue
+          await prisma.assetBid.update({
+            where: { id: existingAcceptedBid.id },
+            data: {
+              isOverdue: true,
+              rejected: true,
+              rejectedAt: new Date(),
+            },
+          });
+
+          // Notify the buyer that their payment is overdue
+          await NotificationService.notifyPaymentOverdue(
+            existingAcceptedBid.buyer.contact.user.id,
+            asset,
+            existingAcceptedBid
+          );
+        } else {
+          throw new CustomError(
+            "Cannot accept a new bid while another bid is active and not overdue",
+            400
+          );
+        }
+      }
+
       // Calculate 24-hour payment deadline
       const paymentDeadline = dayjs().add(24, 'hours').toDate();
       
@@ -88,7 +122,8 @@ export async function POST(
         paymentApprovedByBuyer: false,
         paymentApprovedAt: null,
         rejected: false,
-        rejectedAt: null
+        rejectedAt: null,
+        isOverdue: false,
       };
 
       // Update the accepted bid
@@ -99,8 +134,10 @@ export async function POST(
         data: update,
       });
 
-      // Automatically reject all other bids for this asset
-      const otherBids = asset.bids.filter((b) => b.id !== bidId);
+      // Automatically reject all other NON-OVERDUE bids for this asset
+      const otherBids = asset.bids.filter((b) => 
+        b.id !== bidId && !b.isOverdue
+      );
       
       if (otherBids.length > 0) {
         await prisma.assetBid.updateMany({
@@ -108,6 +145,7 @@ export async function POST(
             assetId: assetId,
             id: { not: bidId },
             accepted: false,
+            isOverdue: false,
           },
           data: {
             rejected: true,
@@ -115,20 +153,7 @@ export async function POST(
           },
         });
 
-        // Send rejection notifications to all other buyers
-        for (const rejectedBid of otherBids) {
-          try {
-            await NotificationService.notifyBidRejected(
-              rejectedBid.buyer.contact.user.id,
-              asset.seller.name,
-              asset,
-              rejectedBid
-            );
-            console.log(`Rejection notification sent to buyer ${rejectedBid.buyer.contact.user.id}`);
-          } catch (notificationError) {
-            console.error("Failed to send bid rejection notification:", notificationError);
-          }
-        }
+        console.log(`${otherBids.length} other bids were automatically rejected (no notifications sent)`);
       }
 
       // Send email to accepted buyer with payment approval link
@@ -157,23 +182,22 @@ export async function POST(
 
       console.log(`Bid acceptance email sent to ${buyerEmail} with payment approval token`);
 
-      // Send bell notifications to both buyer and seller for accepted bid
+      // Send bell notifications ONLY to the accepted buyer and seller
       try {
         await NotificationService.notifyBidAccepted(
-          bid.buyer.contact.user.id, // buyer user ID
-          asset.seller.contact.user.id, // seller user ID
-          asset.seller.name, // seller name
+          bid.buyer.contact.user.id,
+          asset.seller.contact.user.id,
+          asset.seller.name,
           asset,
           bid
         );
         console.log(`Bell notifications sent to buyer ${bid.buyer.contact.user.id} and seller ${asset.seller.contact.user.id} for bid acceptance`);
       } catch (notificationError) {
         console.error("Failed to send bid acceptance notifications:", notificationError);
-        // Don't fail the request if notification fails
       }
 
     } else if (action === "cancel-accept") {
-      // When cancelling an acceptance, also unreject the other bids
+      // When cancelling an acceptance, unreject other non-overdue bids
       update = { 
         accepted: false, 
         acceptedAt: null,
@@ -190,12 +214,13 @@ export async function POST(
         data: update,
       });
 
-      // Unreject other bids to allow seller to accept them again
+      // Unreject other non-overdue bids to allow seller to accept them again
       await prisma.assetBid.updateMany({
         where: {
           assetId: assetId,
           id: { not: bidId },
           rejected: true,
+          isOverdue: false,
         },
         data: {
           rejected: false,
@@ -219,18 +244,7 @@ export async function POST(
         data: update,
       });
 
-      // Notify buyer about bid rejection
-      try {
-        await NotificationService.notifyBidRejected(
-          bid.buyer.contact.user.id,
-          asset.seller.name,
-          asset,
-          bid
-        );
-        console.log(`Rejection notification sent to buyer ${bid.buyer.contact.user.id}`);
-      } catch (notificationError) {
-        console.error("Failed to send bid rejection notification:", notificationError);
-      }
+      console.log(`Bid ${bidId} rejected (no notification sent to buyer)`);
     }
 
     // Return all bids for this asset
@@ -266,7 +280,6 @@ export async function POST(
     return NextResponse.json(bids);
   } catch (error: any) {
     console.log(error);
-    const errObj = { status: "error" };
     if (error.message === "INVALID_REQUEST") {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

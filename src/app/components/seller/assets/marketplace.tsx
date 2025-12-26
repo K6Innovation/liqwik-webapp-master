@@ -22,33 +22,32 @@ export default function MarketList({ assets = [] }: Props) {
     return () => clearInterval(timer);
   }, []);
 
-  // Filter assets to show only posted (not cancelled) assets with pending bids or no bids
-  // AND exclude assets with accepted bids (already sold)
-  const filterAssetsWithPendingBids = (assetList: any[]) => {
+  // Filter marketplace: Show assets with no bids, pending bids, OR can accept other bids
+  const filterMarketplaceAssets = (assetList: any[]) => {
     return assetList.filter(asset => {
-      // Only show if fee is approved, posted, and NOT cancelled
-      if (!asset.feeApprovedBySeller || !asset.isPosted || asset.isCancelled) return false;
+      // Must be fee approved, posted, and not cancelled
+      if (!asset.feeApprovedBySeller || !asset.isPosted || asset.isCancelled) {
+        return false;
+      }
       
-      // NEW: Don't show if any bid has been accepted (asset is already sold)
-      if (asset.bids && asset.bids.some((bid: any) => bid.accepted)) return false;
+      // Show if: 
+      // 1. No accepted bids at all
+      // 2. OR has overdue bid and no active accepted bid (canAcceptOtherBids)
+      const hasActiveAcceptedBid = asset.bids && asset.bids.some((bid: any) => 
+        bid.accepted && !bid.isOverdue
+      );
       
-      // Show if no bids at all
-      if (!asset.bids || asset.bids.length === 0) return true;
-      
-      // Show if there are any non-accepted bids
-      const pendingBids = asset.bids.filter((bid: any) => !bid.accepted);
-      return pendingBids.length > 0;
+      return !hasActiveAcceptedBid || asset.canAcceptOtherBids;
     });
   };
 
-  // Get unique bill-to parties (only from posted, non-cancelled assets without accepted bids)
   const getBillToParties = () => {
     const parties = new Set();
     const validAssets = assets.filter(asset => 
       asset.feeApprovedBySeller && 
       asset.isPosted && 
       !asset.isCancelled &&
-      (!asset.bids || !asset.bids.some((bid: any) => bid.accepted))
+      (!asset.bids || !asset.bids.some((bid: any) => bid.accepted && !bid.isOverdue) || asset.canAcceptOtherBids)
     );
     validAssets.forEach(asset => {
       if (asset.billToParty && asset.billToParty.name) {
@@ -58,18 +57,15 @@ export default function MarketList({ assets = [] }: Props) {
     return Array.from(parties) as string[];
   };
 
-  // Apply filters
   useEffect(() => {
-    let filtered = filterAssetsWithPendingBids(assets);
+    let filtered = filterMarketplaceAssets(assets);
 
-    // Filter by selected parties
     if (selectedParties.length > 0) {
       filtered = filtered.filter(asset => 
         selectedParties.includes(asset.billToParty.name)
       );
     }
 
-    // Filter by date range
     if (dateRange.start || dateRange.end) {
       filtered = filtered.filter(asset => {
         const invoiceDate = new Date(asset.invoiceDate);
@@ -100,13 +96,28 @@ export default function MarketList({ assets = [] }: Props) {
   };
 
   const getBidStatus = (asset: any) => {
-    if (!asset.bids || asset.bids.length === 0) return { total: 0, accepted: 0, pending: 0 };
+    if (!asset.bids || asset.bids.length === 0) return { 
+      total: 0, 
+      accepted: 0, 
+      pending: 0,
+      hasAcceptedBid: false,
+      hasOverdueBid: false,
+      canAcceptOtherBids: false
+    };
     
-    const accepted = asset.bids.filter((bid: any) => bid.accepted).length;
+    const activeAccepted = asset.bids.filter((bid: any) => bid.accepted && !bid.isOverdue).length;
     const total = asset.bids.length;
-    const pending = total - accepted;
+    const pending = asset.bids.filter((bid: any) => !bid.accepted && !bid.rejected && !bid.isOverdue).length;
+    const hasOverdueBid = asset.bids.some((bid: any) => bid.isOverdue);
     
-    return { total, accepted, pending };
+    return { 
+      total, 
+      accepted: activeAccepted, 
+      pending,
+      hasAcceptedBid: activeAccepted > 0,
+      hasOverdueBid,
+      canAcceptOtherBids: asset.canAcceptOtherBids || false
+    };
   };
 
   const selectAllParties = () => {
@@ -117,7 +128,6 @@ export default function MarketList({ assets = [] }: Props) {
     setSelectedParties([]);
   };
 
-  // Get first two digits of face value
   const getFaceValueFirstTwo = (faceValue: number) => {
     const faceValueStr = faceValue?.toString() || "0";
     return faceValueStr.length >= 2 ? faceValueStr.substring(0, 2) : faceValueStr.padStart(2, '0');
@@ -162,14 +172,12 @@ export default function MarketList({ assets = [] }: Props) {
                   value={dateRange.start}
                   onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
                   className="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
-                  placeholder="dd-mm-yyyy"
                 />
                 <input
                   type="date"
                   value={dateRange.end}
                   onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                   className="w-full border border-pink-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
-                  placeholder="dd-mm-yyyy"
                 />
               </div>
             </div>
@@ -183,7 +191,6 @@ export default function MarketList({ assets = [] }: Props) {
                 Bill-to Parties ({selectedParties.length}/{getBillToParties().length})
               </h3>
               
-              {/* Selected parties display */}
               <div className="mb-2">
                 {selectedParties.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -207,7 +214,6 @@ export default function MarketList({ assets = [] }: Props) {
                 )}
               </div>
 
-              {/* Dropdown Button */}
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 border border-pink-200 rounded-lg bg-white text-left focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
@@ -222,7 +228,6 @@ export default function MarketList({ assets = [] }: Props) {
                 </svg>
               </button>
 
-              {/* Dropdown Menu */}
               {isDropdownOpen && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-pink-200 rounded-lg shadow-xl max-h-60 overflow-auto">
                   <div className="px-3 py-2 bg-gradient-to-r from-pink-50 to-purple-50 border-b border-pink-100 flex justify-between">
@@ -262,7 +267,7 @@ export default function MarketList({ assets = [] }: Props) {
           <div className="mt-4 pt-4 border-t border-pink-100">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-pink-700">
-                Showing {filteredAssets.length} of {filterAssetsWithPendingBids(assets).length} marketplace invoices
+                Showing {filteredAssets.length} of {filterMarketplaceAssets(assets).length} marketplace invoices
               </span>
               {filteredAssets.length > 0 && (
                 <span className="text-xs text-gray-500">
@@ -288,7 +293,6 @@ export default function MarketList({ assets = [] }: Props) {
                 >
                   <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden hover:shadow-xl hover:border-pink-200 transition-all duration-300 transform hover:-translate-y-1">
                     <div className="flex items-center p-5">
-                      {/* Gold Token coin with overlay values */}
                       <div className="relative w-20 h-20 flex-shrink-0">
                         <Image
                           src="/Transparent-Gold-image.png"
@@ -347,6 +351,14 @@ export default function MarketList({ assets = [] }: Props) {
                           <div className="text-sm font-medium text-gray-600">
                             #{asset.invoiceNumber}
                           </div>
+                          {bidStatus.canAcceptOtherBids && (
+                            <>
+                              <span className="text-gray-400">•</span>
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                Can Accept Other Bids
+                              </span>
+                            </>
+                          )}
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -372,7 +384,6 @@ export default function MarketList({ assets = [] }: Props) {
 
                           <span className="text-gray-300">|</span>
                           
-                          {/* Bid Status */}
                           {bidStatus.total === 0 ? (
                             <div className="flex items-center gap-1.5 text-gray-500">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -380,7 +391,7 @@ export default function MarketList({ assets = [] }: Props) {
                               </svg>
                               <span>No bids</span>
                             </div>
-                          ) : bidStatus.pending > 0 ? (
+                          ) : bidStatus.pending > 0 || bidStatus.canAcceptOtherBids ? (
                             <div className="flex items-center gap-1.5 text-orange-600 font-medium">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -416,7 +427,7 @@ export default function MarketList({ assets = [] }: Props) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
                 <h3 className="mt-4 text-lg font-semibold text-gray-900">No marketplace invoices available</h3>
-                <p className="mt-2 text-sm text-gray-500">Only posted invoices without accepted bids are shown in the marketplace.</p>
+                <p className="mt-2 text-sm text-gray-500">Posted invoices with no active bids or accepting new bids will appear here.</p>
               </div>
             </div>
           )}

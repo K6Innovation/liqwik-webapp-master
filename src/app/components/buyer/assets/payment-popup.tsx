@@ -46,8 +46,9 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
         // 1. This user has a bid
         // 2. Their bid is accepted
         // 3. Payment is not yet approved
-        // 4. Payment deadline hasn't passed (if exists)
-        if (!userBid || !userBid.accepted || userBid.paymentApprovedByBuyer) {
+        // 4. Payment deadline hasn't passed (not overdue)
+        // 5. Bid is not marked as overdue
+        if (!userBid || !userBid.accepted || userBid.paymentApprovedByBuyer || userBid.isOverdue) {
           return false;
         }
         
@@ -56,7 +57,7 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
           const deadline = new Date(userBid.paymentDeadline);
           const now = new Date();
           
-          // Include if deadline hasn't passed yet
+          // Only include if deadline hasn't passed yet
           return now <= deadline;
         }
         
@@ -120,6 +121,7 @@ export default function PaymentPopup({ isOpen, onClose, userId, onPaymentComplet
       if (response.ok) {
         console.log("✓ Payment confirmed successfully");
         console.log("✓ Emails should be sent to buyer and seller");
+        console.log("✓ Bill-to-party payment tracking initiated");
         
         // Remove the asset from pending list
         setPendingAssets(prev => prev.filter(a => a.id !== selectedAsset.id));

@@ -24,7 +24,25 @@ export async function GET(
       createdAt: "desc",
     },
     include: {
-      bids: true,
+      bids: {
+        include: {
+          buyer: {
+            select: {
+              id: true,
+              name: true,
+              contact: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       billToParty: {
         select: {
           id: true,
@@ -34,10 +52,60 @@ export async function GET(
     },
   });
 
+  // Check for overdue bids and update them
+  const now = new Date();
+  for (const asset of assets) {
+    for (const bid of asset.bids) {
+      if (
+        bid.accepted &&
+        !bid.paymentApprovedByBuyer &&
+        !bid.isOverdue &&
+        bid.paymentDeadline &&
+        now > new Date(bid.paymentDeadline)
+      ) {
+        // Mark bid as overdue
+        await prisma.assetBid.update({
+          where: { id: bid.id },
+          data: {
+            isOverdue: true,
+            rejected: true,
+            rejectedAt: now,
+          },
+        });
+
+        // Update the bid in the current response
+        bid.isOverdue = true;
+        bid.rejected = true;
+        bid.rejectedAt = now;
+
+        // Notify buyer about overdue payment
+        try {
+          await NotificationService.notifyPaymentOverdue(
+            bid.buyer.contact.user.id,
+            asset,
+            bid
+          );
+        } catch (error) {
+          console.error("Failed to send overdue notification:", error);
+        }
+      }
+    }
+  }
+
   const responseObj = assets.map((asset) => {
+    // Check if asset has any overdue bids (meaning it can accept other bids)
+    const hasOverdueBid = asset.bids.some((bid: any) => bid.isOverdue);
+    
+    // Check if there's currently an active (non-overdue) accepted bid
+    const hasActiveAcceptedBid = asset.bids.some(
+      (bid: any) => bid.accepted && !bid.isOverdue
+    );
+
     return {
       ...asset,
       numDaysForPayment: dayjs(asset.paymentDate).diff(dayjs(), "days"),
+      hasOverdueBid,
+      canAcceptOtherBids: hasOverdueBid && !hasActiveAcceptedBid,
     };
   });
 
@@ -76,7 +144,6 @@ export async function POST(
       throw new CustomError("Term Months is required", 400);
     }
 
-    // Get APY and fees from form data
     const apy = parseFloat(formData.get("apy") as string) || 0;
     const fees = parseFloat(formData.get("fees") as string) || 0;
     const feesInCents = Math.round(fees * 100);
@@ -107,7 +174,6 @@ export async function POST(
       throw new CustomError("Bill To Party not found", 400);
     }
 
-    // Create asset first to get the ID
     const assetData: any = {
       invoiceNumber: formData.get("invoiceNumber"),
       invoiceDate: dayjs(invoiceDate).toDate(),
@@ -128,7 +194,6 @@ export async function POST(
       },
     });
 
-    // Handle file uploads
     const invoiceFile = formData.get("invoiceFile") as File;
     const bankStatementFile = formData.get("bankStatementFile") as File;
     const billToPartyHistoryFile = formData.get("billToPartyHistoryFile") as File;
@@ -171,20 +236,17 @@ export async function POST(
       );
     }
 
-    // Update asset with file paths
     const updatedAsset = await prisma.asset.update({
       where: { id: asset.id },
       data: filePaths,
     });
 
-    // Create notification for seller when asset is created
     await NotificationService.notifyAssetCreated(
       seller.contact.user.id,
       updatedAsset,
       billToParty.name
     );
 
-    // Return asset with calculated face value
     const responseAsset = {
       ...updatedAsset,
       faceValue: faceValueInCents / 100,

@@ -119,14 +119,17 @@ export async function PATCH(
     console.log("Bid ID:", bidId);
     console.log("Payment Approved:", paymentApproved);
 
-    // Fetch asset and bid with full details including seller
+    // Fetch asset and bid with full details including seller and bill-to-party
     const asset = await prisma.asset.findUnique({
       where: { id: assetId },
       include: {
         billToParty: {
-          select: {
-            id: true,
-            name: true,
+          include: {
+            contact: {
+              include: {
+                user: true,
+              },
+            },
           },
         },
         seller: {
@@ -280,12 +283,108 @@ export async function PATCH(
         console.error("✗ Failed to send payment notifications:", notificationError);
       }
 
+      // ========================================
+      // CREATE BILL-TO-PARTY PAYMENT TRACKING
+      // ========================================
+      console.log("=== Creating Bill-to-Party Payment Record ===");
+      
+      let billToPartyPaymentCreated = false;
+      let billToPartyEmailSent = false;
+      
+      try {
+        // Calculate due date based on asset's termMonths
+        const termMonths = asset.termMonths || 1;
+        const dueDate = new Date();
+        dueDate.setMonth(dueDate.getMonth() + termMonths);
+        
+        // Calculate first reminder date (3 days from now)
+        const firstReminderDate = new Date();
+        firstReminderDate.setDate(firstReminderDate.getDate() + 3);
+        
+        const faceValueInCents = asset.faceValueInCents;
+
+        console.log(`Due Date: ${dueDate.toISOString()}`);
+        console.log(`First Reminder: ${firstReminderDate.toISOString()}`);
+        console.log(`Amount: €${(faceValueInCents / 100).toFixed(2)}`);
+
+        // Check if payment record already exists
+        const existingPayment = await prisma.billToPartyPayment.findUnique({
+          where: {
+            assetId_billToPartyId: {
+              assetId: asset.id,
+              billToPartyId: asset.billToPartyId,
+            },
+          },
+        });
+
+        if (!existingPayment) {
+          // Create the bill-to-party payment record
+          const billToPartyPayment = await prisma.billToPartyPayment.create({
+            data: {
+              assetId: asset.id,
+              billToPartyId: asset.billToPartyId,
+              amountInCents: faceValueInCents,
+              dueDate: dueDate,
+              nextReminderDueAt: firstReminderDate,
+            },
+          });
+
+          billToPartyPaymentCreated = true;
+          console.log(`✓ Bill-to-party payment record created: ${billToPartyPayment.id}`);
+
+          // Send initial payment due email to bill-to-party
+          try {
+            await emailService.sendBillToPartyPaymentDueEmail({
+              billToPartyEmail: asset.billToParty.email,
+              billToPartyName: asset.billToParty.name,
+              buyerName: bid.buyer.name,
+              invoiceNumber: asset.invoiceNumber,
+              faceValue: faceValueInCents / 100,
+              amountDue: faceValueInCents / 100,
+              dueDate: dueDate.toISOString(),
+              invoiceDate: asset.invoiceDate.toISOString(),
+              originalPaymentDate: asset.paymentDate.toISOString(),
+              assetId: asset.id,
+            });
+
+            billToPartyEmailSent = true;
+            console.log(`✓ Payment due email sent to bill-to-party: ${asset.billToParty.email}`);
+
+            // Create notification for bill-to-party
+            const billToPartyUserId = asset.billToParty.contact?.userId;
+            if (billToPartyUserId) {
+              await prisma.notification.create({
+                data: {
+                  userId: billToPartyUserId,
+                  type: "BILL_TO_PARTY_PAYMENT_DUE",
+                  title: "Payment Due",
+                  message: `Payment of €${(faceValueInCents / 100).toFixed(2)} is due for invoice ${asset.invoiceNumber} by ${dueDate.toLocaleDateString()}.`,
+                  assetId: asset.id,
+                  roleContext: "bill-to-party",
+                },
+              });
+
+              console.log(`✓ Notification created for bill-to-party user: ${billToPartyUserId}`);
+            }
+          } catch (emailError) {
+            console.error("✗ Failed to send bill-to-party payment due email:", emailError);
+          }
+        } else {
+          console.log(`ℹ Bill-to-party payment record already exists for asset ${asset.id}`);
+          billToPartyPaymentCreated = true; // Mark as true since it exists
+        }
+      } catch (billToPartyError) {
+        console.error("✗ Failed to create bill-to-party payment record:", billToPartyError);
+      }
+
       console.log("=== Payment Approval Complete ===");
       console.log("Summary:");
       console.log(`- Payment approved: ✓`);
       console.log(`- Buyer email sent: ${buyerEmailSent ? '✓' : '✗'}`);
       console.log(`- Seller email sent: ${sellerEmailSent ? '✓' : '✗'}`);
       console.log(`- Bell notifications sent: ${notificationsSent ? '✓' : '✗'}`);
+      console.log(`- Bill-to-party payment record: ${billToPartyPaymentCreated ? '✓' : '✗'}`);
+      console.log(`- Bill-to-party email sent: ${billToPartyEmailSent ? '✓' : '✗'}`);
 
       return NextResponse.json({
         success: true,
@@ -294,8 +393,10 @@ export async function PATCH(
         emails: {
           buyerEmailSent,
           sellerEmailSent,
+          billToPartyEmailSent,
         },
         notificationsSent,
+        billToPartyPaymentCreated,
       });
     }
 

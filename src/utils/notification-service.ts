@@ -13,7 +13,8 @@ export enum NotificationType {
   FEE_APPROVED = "FEE_APPROVED",
   BILL_TO_PARTY_VALIDATED = "BILL_TO_PARTY_VALIDATED",
   ASSET_POSTED = "ASSET_POSTED",
-  ASSET_CANCELLED = "ASSET_CANCELLED"
+  ASSET_CANCELLED = "ASSET_CANCELLED",
+  PAYMENT_OVERDUE = "PAYMENT_OVERDUE"
 }
 
 interface NotificationData {
@@ -179,7 +180,7 @@ export class NotificationService {
       title: "Asset Created Successfully",
       message: `Your asset for ${billToPartyName} (Invoice: ${asset.invoiceNumber}) has been created successfully.`,
       assetId: asset.id,
-      roleContext: "seller", // Set role context
+      roleContext: "seller",
       metadata: {
         invoiceNumber: asset.invoiceNumber,
         billToPartyName: billToPartyName,
@@ -204,7 +205,7 @@ export class NotificationService {
       message: `${buyerName} has placed a bid of €${(bid.centsPerUnit / 100).toFixed(2)} on your asset (Invoice: ${asset.invoiceNumber}).`,
       assetId: asset.id,
       bidId: bid.id,
-      roleContext: "seller", // Set role context
+      roleContext: "seller",
       metadata: {
         buyerName: buyerName,
         bidAmount: bid.centsPerUnit / 100,
@@ -233,12 +234,13 @@ export class NotificationService {
       message: `Congratulations! Your bid of €${bidAmount} for asset (Invoice: ${asset.invoiceNumber}) has been accepted by ${sellerName}.`,
       assetId: asset.id,
       bidId: bid.id,
-      roleContext: "buyer", // Set role context
+      roleContext: "buyer",
       metadata: {
         sellerName: sellerName,
         bidAmount: bid.centsPerUnit / 100,
         invoiceNumber: asset.invoiceNumber,
         acceptedAt: new Date().toISOString(),
+        paymentDeadline: bid.paymentDeadline,
       },
     };
 
@@ -250,40 +252,17 @@ export class NotificationService {
       message: `You have accepted a bid of €${bidAmount} for your asset (Invoice: ${asset.invoiceNumber}).`,
       assetId: asset.id,
       bidId: bid.id,
-      roleContext: "seller", // Set role context
+      roleContext: "seller",
       metadata: {
         bidAmount: bid.centsPerUnit / 100,
         invoiceNumber: asset.invoiceNumber,
         acceptedAt: new Date().toISOString(),
+        paymentDeadline: bid.paymentDeadline,
       },
     };
 
     // Create both notifications
     await this.createMultipleNotifications([buyerNotification, sellerNotification]);
-  }
-
-  static async notifyBidRejected(
-    buyerUserId: string,
-    sellerName: string,
-    asset: any,
-    bid: any
-  ) {
-    const notification = {
-      userId: buyerUserId,
-      type: NotificationType.BID_REJECTED,
-      title: "Bid Not Accepted",
-      message: `Your bid of €${(bid.centsPerUnit / 100).toFixed(2)} for asset (Invoice: ${asset.invoiceNumber}) was not accepted by ${sellerName}.`,
-      assetId: asset.id,
-      bidId: bid.id,
-      roleContext: "buyer", // Set role context
-      metadata: {
-        sellerName: sellerName,
-        bidAmount: bid.centsPerUnit / 100,
-        invoiceNumber: asset.invoiceNumber,
-      },
-    };
-
-    return await this.createNotification(notification);
   }
 
   // Notify buyer when they save a bid
@@ -299,7 +278,7 @@ export class NotificationService {
       message: `Your bid of €${(bid.centsPerUnit / 100).toFixed(2)} has been saved for asset (Invoice: ${asset.invoiceNumber}).`,
       assetId: asset.id,
       bidId: bid.id,
-      roleContext: "buyer", // Set role context
+      roleContext: "buyer",
       metadata: {
         bidAmount: bid.centsPerUnit / 100,
         invoiceNumber: asset.invoiceNumber,
@@ -327,7 +306,7 @@ export class NotificationService {
       message: `Your payment of €${paymentAmount} has been confirmed for asset (Invoice: ${asset.invoiceNumber}).`,
       assetId: asset.id,
       bidId: bid.id,
-      roleContext: "buyer", // Set role context
+      roleContext: "buyer",
       metadata: {
         paymentAmount: bid.centsPerUnit / 100,
         invoiceNumber: asset.invoiceNumber,
@@ -344,7 +323,7 @@ export class NotificationService {
       message: `Payment of €${paymentAmount} has been confirmed by buyer for asset (Invoice: ${asset.invoiceNumber}).`,
       assetId: asset.id,
       bidId: bid.id,
-      roleContext: "seller", // Set role context
+      roleContext: "seller",
       metadata: {
         paymentAmount: bid.centsPerUnit / 100,
         invoiceNumber: asset.invoiceNumber,
@@ -354,6 +333,31 @@ export class NotificationService {
 
     // Create both notifications
     await this.createMultipleNotifications([buyerNotification, sellerNotification]);
+  }
+
+  // NEW: Notify buyer when payment is overdue
+  static async notifyPaymentOverdue(
+    buyerUserId: string,
+    asset: any,
+    bid: any
+  ) {
+    const notification = {
+      userId: buyerUserId,
+      type: NotificationType.PAYMENT_OVERDUE,
+      title: "Payment Overdue",
+      message: `Your payment for asset (Invoice: ${asset.invoiceNumber}) is now overdue. This contract has been disabled.`,
+      assetId: asset.id,
+      bidId: bid.id,
+      roleContext: "buyer",
+      metadata: {
+        bidAmount: bid.centsPerUnit / 100,
+        invoiceNumber: asset.invoiceNumber,
+        paymentDeadline: bid.paymentDeadline,
+        overdueAt: new Date().toISOString(),
+      },
+    };
+
+    return await this.createNotification(notification);
   }
 
   // Notify seller when fee is approved (by seller in app)
@@ -369,7 +373,7 @@ export class NotificationService {
       title: "Fee Approved",
       message: `Fee of €${feeAmount} has been approved for asset (Invoice: ${asset.invoiceNumber}).`,
       assetId: asset.id,
-      roleContext: "seller", // Set role context
+      roleContext: "seller",
       metadata: {
         feeAmount: (asset.feesInCents || 0) / 100,
         invoiceNumber: asset.invoiceNumber,
@@ -393,7 +397,7 @@ export class NotificationService {
       title: "Asset Validated by Bill-To Party",
       message: `${billToPartyName} has validated your asset (Invoice: ${asset.invoiceNumber}). You can now post the token.`,
       assetId: asset.id,
-      roleContext: "seller", // Set role context
+      roleContext: "seller",
       metadata: {
         invoiceNumber: asset.invoiceNumber,
         billToPartyName: billToPartyName,
@@ -416,7 +420,7 @@ export class NotificationService {
       title: "Asset Posted to Liqwik",
       message: `Your asset (Invoice: ${asset.invoiceNumber}) has been posted to Liqwik and is now visible in your portfolio.`,
       assetId: asset.id,
-      roleContext: "seller", // Set role context
+      roleContext: "seller",
       metadata: {
         invoiceNumber: asset.invoiceNumber,
         faceValue: asset.faceValueInCents / 100,
@@ -438,7 +442,7 @@ export class NotificationService {
       title: "Asset Cancelled",
       message: `Your asset (Invoice: ${asset.invoiceNumber}) has been cancelled and is no longer available.`,
       assetId: asset.id,
-      roleContext: "seller", // Set role context
+      roleContext: "seller",
       metadata: {
         invoiceNumber: asset.invoiceNumber,
         faceValue: asset.faceValueInCents / 100,

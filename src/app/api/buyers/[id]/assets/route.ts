@@ -1,9 +1,11 @@
 // src/app/api/buyers/[id]/assets/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/utils/prisma-client";
 import dayjs from "dayjs";
 import CustomError from "@/utils/custom-error";
 import { getBuyerOrgs } from "@/utils/api/get-user-orgs";
+import { NotificationService } from "@/utils/notification-service";
 
 export async function GET(
   req: NextRequest,
@@ -16,12 +18,10 @@ export async function GET(
     throw new CustomError("User is not associated with an Asset Buyer", 400);
   }
 
-  // Check if we should filter by bids (for "My Liqwik" page)
   const { searchParams } = new URL(req.url);
   const filterByBids = searchParams.get("filterByBids") === "true";
 
   let whereClause: any = {
-    // Only show posted assets to buyers
     isPosted: true,
     isCancelled: false,
   };
@@ -36,7 +36,6 @@ export async function GET(
       },
     };
   }
-  // For marketplace: show all posted and not cancelled assets
 
   const assets = await prisma.asset.findMany({
     where: whereClause,
@@ -72,10 +71,63 @@ export async function GET(
     },
   });
 
+  // Check for overdue bids and update them
+  const now = new Date();
+  for (const asset of assets) {
+    for (const bid of asset.bids) {
+      const isBuyerBid = userOrgs.some(org => org.id === bid.buyerId);
+      
+      if (
+        isBuyerBid &&
+        bid.accepted &&
+        !bid.paymentApprovedByBuyer &&
+        !bid.isOverdue &&
+        bid.paymentDeadline &&
+        now > new Date(bid.paymentDeadline)
+      ) {
+        await prisma.assetBid.update({
+          where: { id: bid.id },
+          data: {
+            isOverdue: true,
+            rejected: true,
+            rejectedAt: now,
+          },
+        });
+
+        bid.isOverdue = true;
+        bid.rejected = true;
+        bid.rejectedAt = now;
+
+        try {
+          await NotificationService.notifyPaymentOverdue(
+            bid.buyer.contact.user.id,
+            asset,
+            bid
+          );
+        } catch (error) {
+          console.error("Failed to send overdue notification:", error);
+        }
+      }
+    }
+  }
+
   const responseObj = assets.map((asset) => {
+    // Check if asset has any overdue bids (can accept other bids)
+    const hasOverdueBid = asset.bids.some((bid: any) => bid.isOverdue);
+    
+    // Check if there's currently a non-overdue accepted bid
+    const hasActiveAcceptedBid = asset.bids.some(
+      (bid: any) => bid.accepted && !bid.isOverdue
+    );
+    
+    // For marketplace visibility: show if no active accepted bid OR has overdue bid
+    const canAcceptOtherBids = hasOverdueBid && !hasActiveAcceptedBid;
+
     return {
       ...asset,
       numDaysForPayment: dayjs(asset.paymentDate).diff(dayjs(), "days"),
+      hasOverdueBid,
+      canAcceptOtherBids,
     };
   });
 

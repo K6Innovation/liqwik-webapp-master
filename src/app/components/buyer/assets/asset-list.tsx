@@ -1,7 +1,7 @@
 // src/app/components/buyer/assets/asset-list.tsx
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from "recharts";
-import { Calendar, TrendingUp, FileText, Gavel, Target, DollarSign, Filter, Users, RotateCcw, ChevronDown, X, Check, Clock, AlertCircle, CheckCircle } from "lucide-react";
+import { Calendar, TrendingUp, FileText, Gavel, Target, DollarSign, Filter, Users, RotateCcw, ChevronDown, X, Check, Clock, AlertCircle, CheckCircle, CreditCard } from "lucide-react";
 import Link from "next/link";
 
 import { useSession } from "next-auth/react";
@@ -333,8 +333,19 @@ export default function AssetList({ assets = [] }: Props) {
   return (
     <div className="min-h-screen bg-gradient-to-br">
       <div className="px-4 py-6 pb-24">
+        {/* Pay for Token Button - Positioned above filters */}
+        <div className="flex justify-end mb-4 mt-6">
+          <button 
+            onClick={() => setIsPaymentPopupOpen(true)}
+            className="bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl flex items-center space-x-2"
+          >
+            <CreditCard className="w-5 h-5" />
+            <span>Pay for Token</span>
+          </button>
+        </div>
+
         {/* Main Filters */}
-        <div className="bg-white rounded-xl p-4 mt-9 mb-6 shadow-sm border">
+        <div className="bg-white rounded-xl p-4 mb-6 shadow-sm border">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-stone-800 flex items-center">
               <Filter className="w-5 h-5 mr-2" />
@@ -610,16 +621,6 @@ export default function AssetList({ assets = [] }: Props) {
               />
             </LineChart>
           </ResponsiveContainer>
-        </div>
-
-        {/* Pay for Token Button */}
-        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50">
-          <button 
-            onClick={() => setIsPaymentPopupOpen(true)}
-            className="bg-pink-700 hover:bg-pink-800 text-white font-semibold py-4 px-8 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center space-x-2"
-          >
-            <span className="text-lg">Pay for token</span>
-          </button>
         </div>
       </div>
 

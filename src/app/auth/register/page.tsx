@@ -4,6 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+interface BillToParty {
+  name: string;
+  email: string;
+  address: string;
+}
+
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
     firstName: "",
@@ -15,7 +21,6 @@ export default function RegisterPage() {
     password: "",
     confirmPassword: "",
     role: "buyer",
-    // Organization specific fields
     organizationName: "",
     address: "",
     
@@ -26,12 +31,7 @@ export default function RegisterPage() {
     businessType: "",
     industrySector: "",
     dateOfIncorporation: "",
-    registrationCertificate: "",
-    proofOfAddress: "",
-    taxDocument: "",
-    ownerIdDocuments: "",
     businessBankAccountDetails: "",
-    bankStatementOrCheque: "",
     authorizedSignatoryDetails: "",
     countryOfIncorporation: "",
     registeredBusinessAddress: "",
@@ -49,19 +49,17 @@ export default function RegisterPage() {
     companyWebsite: "",
     preferredPaymentMethod: "",
     bankDetails: "",
-    businessLicense: "",
-    taxExemptionCertificate: "",
-    poAuthorizationLetter: "",
-    governmentId: "",
     purchaseOrderNumber: "",
-    einvoicingEmail: "",
-    accountsPayableContact: "",
-    consentForCreditCheck: false,
   });
+
+  const [billToParties, setBillToParties] = useState<BillToParty[]>([
+    { name: "", email: "", address: "" }
+  ]);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [info, setInfo] = useState("");
   
   const router = useRouter();
 
@@ -73,40 +71,79 @@ export default function RegisterPage() {
     }));
   };
 
+  const handleBillToPartyChange = (index: number, field: keyof BillToParty, value: string) => {
+    const updated = [...billToParties];
+    updated[index][field] = value;
+    setBillToParties(updated);
+  };
+
+  const addBillToParty = () => {
+    setBillToParties([...billToParties, { name: "", email: "", address: "" }]);
+  };
+
+  const removeBillToParty = (index: number) => {
+    if (billToParties.length > 1) {
+      setBillToParties(billToParties.filter((_, i) => i !== index));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     setSuccess("");
+    setInfo("");
 
-    // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
       setLoading(false);
       return;
     }
 
+    // Validate bill-to-parties for sellers
+    if (formData.role === "seller") {
+      const validBillToParties = billToParties.filter(
+        btp => btp.name && btp.email && btp.address
+      );
+      
+      if (validBillToParties.length === 0) {
+        setError("Please add at least one Bill-to-Party with complete information");
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
+      const payload = {
+        ...formData,
+        billToParties: formData.role === "seller" 
+          ? billToParties.filter(btp => btp.name && btp.email && btp.address)
+          : undefined,
+      };
+
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess("Registration successful! Redirecting to email verification...");
+        if (data.isNewUser) {
+          setSuccess("Registration successful! Redirecting to email verification...");
+        } else {
+          setSuccess(`${formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} role added successfully! Redirecting to email verification...`);
+          setInfo("Note: You can use the same credentials to login after verification.");
+        }
         
-        // Build the verification URL with all required parameters
         const verifyUrl = `/auth/verify-email?email=${encodeURIComponent(data.email)}&firstName=${encodeURIComponent(data.firstName)}&role=${encodeURIComponent(data.role)}&userRoleId=${encodeURIComponent(data.userRoleId)}`;
         
-        console.log("Redirecting to:", verifyUrl); // Debug log
-        
-        // Use window.location for immediate redirect
-        window.location.href = verifyUrl;
+        setTimeout(() => {
+          window.location.href = verifyUrl;
+        }, 2000);
       } else {
         setError(data.error || "Registration failed");
         setLoading(false);
@@ -117,6 +154,82 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  const renderBillToPartyFields = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between border-b pb-2">
+        <h3 className="text-lg font-semibold text-gray-800">Bill-to-Party Information</h3>
+        <button
+          type="button"
+          onClick={addBillToParty}
+          className="text-sm px-3 py-1 bg-pink-600 text-white rounded hover:bg-pink-700"
+        >
+          + Add Another
+        </button>
+      </div>
+
+      {billToParties.map((btp, index) => (
+        <div key={index} className="p-4 border border-gray-200 rounded-lg space-y-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-md font-medium text-gray-700">
+              Bill-to-Party #{index + 1}
+            </h4>
+            {billToParties.length > 1 && (
+              <button
+                type="button"
+                onClick={() => removeBillToParty(index)}
+                className="text-sm text-red-600 hover:text-red-700"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Company Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={btp.name}
+              onChange={(e) => handleBillToPartyChange(index, "name", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+              placeholder="Enter bill-to-party company name"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={btp.email}
+              onChange={(e) => handleBillToPartyChange(index, "email", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+              placeholder="Enter bill-to-party email"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Address <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={btp.address}
+              onChange={(e) => handleBillToPartyChange(index, "address", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+              placeholder="Enter bill-to-party address"
+              required
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
   const renderSellerKYBFields = () => (
     <div className="space-y-4">
@@ -132,7 +245,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.legalBusinessName}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter legal business name"
         />
       </div>
@@ -147,7 +260,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.registrationNumber}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter registration number"
         />
       </div>
@@ -162,7 +275,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.taxIdentificationNumber}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter tax identification number"
         />
       </div>
@@ -177,7 +290,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.businessType}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter business type"
         />
       </div>
@@ -192,7 +305,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.industrySector}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter industry sector"
         />
       </div>
@@ -207,7 +320,7 @@ export default function RegisterPage() {
           type="date"
           value={formData.dateOfIncorporation}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
         />
       </div>
 
@@ -221,7 +334,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.countryOfIncorporation}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter country of incorporation"
         />
       </div>
@@ -236,7 +349,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.registeredBusinessAddress}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter registered business address"
         />
       </div>
@@ -251,7 +364,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.operatingAddress}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter operating address"
         />
       </div>
@@ -266,7 +379,7 @@ export default function RegisterPage() {
           type="url"
           value={formData.websiteUrl}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter website URL"
         />
       </div>
@@ -281,7 +394,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.businessBankAccountDetails}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter bank account details"
         />
       </div>
@@ -296,7 +409,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.authorizedSignatoryDetails}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter authorized signatory details"
         />
       </div>
@@ -311,7 +424,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.listOfDirectors}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter list of directors"
         />
       </div>
@@ -326,7 +439,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.ultimateBeneficialOwners}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter ultimate beneficial owners"
         />
       </div>
@@ -341,7 +454,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.shareholdingStructure}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter shareholding structure"
         />
       </div>
@@ -362,7 +475,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.companyName}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter company name"
         />
       </div>
@@ -377,7 +490,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.businessType}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter business type"
         />
       </div>
@@ -392,7 +505,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.industrySector}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter industry sector"
         />
       </div>
@@ -407,7 +520,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.businessRegistrationNumber}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter business registration number"
         />
       </div>
@@ -422,7 +535,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.taxIdentificationNumber}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter tax identification number"
         />
       </div>
@@ -437,7 +550,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.billingAddress}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter billing address"
         />
       </div>
@@ -452,7 +565,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.shippingAddress}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter shipping address"
         />
       </div>
@@ -467,7 +580,7 @@ export default function RegisterPage() {
           type="url"
           value={formData.companyWebsite}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter company website"
         />
       </div>
@@ -481,7 +594,7 @@ export default function RegisterPage() {
           name="preferredPaymentMethod"
           value={formData.preferredPaymentMethod}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
         >
           <option value="">Select payment method</option>
           <option value="bank_transfer">Bank Transfer</option>
@@ -502,7 +615,7 @@ export default function RegisterPage() {
           type="text"
           value={formData.bankDetails}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter bank details"
         />
       </div>
@@ -517,53 +630,9 @@ export default function RegisterPage() {
           type="text"
           value={formData.purchaseOrderNumber}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
           placeholder="Enter purchase order number"
         />
-      </div>
-
-      <div>
-        <label htmlFor="einvoicingEmail" className="block text-sm font-medium text-gray-700 mb-1">
-          E-invoicing Contact Email
-        </label>
-        <input
-          id="einvoicingEmail"
-          name="einvoicingEmail"
-          type="email"
-          value={formData.einvoicingEmail}
-          onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-          placeholder="Enter e-invoicing contact email"
-        />
-      </div>
-
-      <div>
-        <label htmlFor="accountsPayableContact" className="block text-sm font-medium text-gray-700 mb-1">
-          Accounts Payable Contact
-        </label>
-        <input
-          id="accountsPayableContact"
-          name="accountsPayableContact"
-          type="text"
-          value={formData.accountsPayableContact}
-          onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-          placeholder="Enter accounts payable contact"
-        />
-      </div>
-
-      <div className="flex items-center">
-        <input
-          id="consentForCreditCheck"
-          name="consentForCreditCheck"
-          type="checkbox"
-          checked={formData.consentForCreditCheck}
-          onChange={handleInputChange}
-          className="h-4 w-4 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
-        />
-        <label htmlFor="consentForCreditCheck" className="ml-2 block text-sm text-gray-700">
-          I consent to credit check
-        </label>
       </div>
     </div>
   );
@@ -574,17 +643,19 @@ export default function RegisterPage() {
         <div className="bg-white p-8 rounded-lg shadow-md">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-pink-600">Register for Liqwik</h2>
+            <p className="text-sm text-gray-600 mt-2">
+              Already registered? You can add additional roles using the same credentials.
+            </p>
           </div>
           
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Basic Information */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Basic Information</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-                    First Name
+                    First Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="firstName"
@@ -593,14 +664,14 @@ export default function RegisterPage() {
                     value={formData.firstName}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                     placeholder="Enter your first name"
                   />
                 </div>
 
                 <div>
                   <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
-                    Last Name
+                    Last Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="lastName"
@@ -609,7 +680,7 @@ export default function RegisterPage() {
                     value={formData.lastName}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                     placeholder="Enter your last name"
                   />
                 </div>
@@ -625,7 +696,7 @@ export default function RegisterPage() {
                   type="text"
                   value={formData.middleName}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                   placeholder="Enter your middle name"
                 />
               </div>
@@ -633,7 +704,7 @@ export default function RegisterPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-                    Username
+                    Username <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="username"
@@ -642,14 +713,14 @@ export default function RegisterPage() {
                     value={formData.username}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                     placeholder="Choose a username"
                   />
                 </div>
 
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
+                    Email <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="email"
@@ -658,7 +729,7 @@ export default function RegisterPage() {
                     value={formData.email}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                     placeholder="Enter your email"
                   />
                 </div>
@@ -674,21 +745,21 @@ export default function RegisterPage() {
                   type="tel"
                   value={formData.phone}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                   placeholder="Enter your phone number"
                 />
               </div>
 
               <div>
                 <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
-                  Register as
+                  Register as <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="role"
                   name="role"
                   value={formData.role}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                 >
                   <option value="buyer">Buyer</option>
                   <option value="seller">Seller</option>
@@ -698,7 +769,7 @@ export default function RegisterPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="organizationName" className="block text-sm font-medium text-gray-700 mb-1">
-                    Organization Name
+                    Organization Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="organizationName"
@@ -707,14 +778,14 @@ export default function RegisterPage() {
                     value={formData.organizationName}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                     placeholder="Enter organization name"
                   />
                 </div>
 
                 <div>
                   <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-                    Address
+                    Address <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="address"
@@ -723,7 +794,7 @@ export default function RegisterPage() {
                     value={formData.address}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                     placeholder="Enter organization address"
                   />
                 </div>
@@ -732,7 +803,7 @@ export default function RegisterPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                    Password
+                    Password <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="password"
@@ -741,14 +812,14 @@ export default function RegisterPage() {
                     value={formData.password}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                     placeholder="Create a password"
                   />
                 </div>
 
                 <div>
                   <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm Password
+                    Confirm Password <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="confirmPassword"
@@ -757,23 +828,27 @@ export default function RegisterPage() {
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                     placeholder="Confirm your password"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Role-specific KYB Fields */}
             {formData.role === "seller" && renderSellerKYBFields()}
             {formData.role === "buyer" && renderBuyerKYBFields()}
+            {formData.role === "seller" && renderBillToPartyFields()}
+
+            {info && (
+              <div className="text-blue-600 text-sm text-center bg-blue-50 p-3 rounded-md">{info}</div>
+            )}
 
             {error && (
-              <div className="text-red-600 text-sm text-center">{error}</div>
+              <div className="text-red-600 text-sm text-center bg-red-50 p-3 rounded-md">{error}</div>
             )}
 
             {success && (
-              <div className="text-green-600 text-sm text-center">{success}</div>
+              <div className="text-green-600 text-sm text-center bg-green-50 p-3 rounded-md">{success}</div>
             )}
 
             <button

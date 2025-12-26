@@ -64,7 +64,7 @@ model UserRole {
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   role        Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
   seller      AssetSeller?
-  billToParty BillToParty?
+  billToParties   BillToParty[]
   buyer       AssetBuyer?
 
   @@unique([userId, roleId])
@@ -106,13 +106,17 @@ model BillToParty {
   name         String   @unique
   address      String
   email        String   @map("email")
-  contact      UserRole @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  contactId    String   @unique @map("contact_id")
+  createdByUserId String?  @map("created_by_user_id")
+  contactId    String   @map("contact_id")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   assets       Asset[]
   liqwikRating Int?     @map("liqwik_rating")
+  
+  contact      UserRole @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  billToPartyPayments BillToPartyPayment[]
 
+  @@unique([contactId, name])
   @@map("bill_to_parties")
 }
 
@@ -180,6 +184,8 @@ model Asset {
   isCancelled              Boolean     @default(false) @map("is_cancelled")
   cancelledAt              DateTime?   @map("cancelled_at")
   
+  billToPartyPayments      BillToPartyPayment[]
+  
   @@unique([sellerId, billToPartyId, invoiceNumber])
   @@map("assets")
 }
@@ -205,8 +211,37 @@ model AssetBid {
   paymentApprovedAt              DateTime?  @map("payment_approved_at")
   paymentConfirmationEmailSent   Boolean    @default(false) @map("payment_confirmation_email_sent")
   sellerPaymentNotificationSent  Boolean    @default(false) @map("seller_payment_notification_sent")
+  
+  isOverdue                      Boolean    @default(false) @map("is_overdue")
 
   @@map("asset_bids")
+}
+
+model BillToPartyPayment {
+  id                        String      @id @default(cuid())
+  asset                     Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assetId                   String      @map("asset_id")
+  billToParty               BillToParty @relation(fields: [billToPartyId], references: [id], onDelete: Cascade)
+  billToPartyId             String      @map("bill_to_party_id")
+  
+  amountInCents             Int         @map("amount_in_cents")
+  dueDate                   DateTime    @map("due_date")
+  
+  isPaid                    Boolean     @default(false) @map("is_paid")
+  paidAt                    DateTime?   @map("paid_at")
+  
+  remindersSent             Int         @default(0) @map("reminders_sent")
+  lastReminderSentAt        DateTime?   @map("last_reminder_sent_at")
+  nextReminderDueAt         DateTime?   @map("next_reminder_due_at")
+  
+  isOverdue                 Boolean     @default(false) @map("is_overdue")
+  overdueNotificationSent   Boolean     @default(false) @map("overdue_notification_sent")
+  
+  createdAt                 DateTime    @default(now()) @map("created_at")
+  updatedAt                 DateTime    @updatedAt @map("updated_at")
+
+  @@unique([assetId, billToPartyId])
+  @@map("bill_to_party_payments")
 }
 
 model Notification {
@@ -242,4 +277,9 @@ enum NotificationType {
   BILL_TO_PARTY_VALIDATED
   ASSET_POSTED
   ASSET_CANCELLED
+  PAYMENT_OVERDUE
+  BILL_TO_PARTY_PAYMENT_DUE
+  BILL_TO_PARTY_PAYMENT_REMINDER
+  BILL_TO_PARTY_PAYMENT_OVERDUE
+  BILL_TO_PARTY_PAYMENT_COMPLETED
 }

@@ -90,6 +90,42 @@ interface AssetCancelledEmailData {
   assetId: string;
 }
 
+interface BillToPartyPaymentDueEmailData {
+  billToPartyEmail: string;
+  billToPartyName: string;
+  buyerName: string;
+  invoiceNumber: string;
+  faceValue: number;
+  amountDue: number;
+  dueDate: string;
+  invoiceDate: string;
+  originalPaymentDate: string;
+  assetId: string;
+}
+
+interface BillToPartyPaymentReminderEmailData {
+  billToPartyEmail: string;
+  billToPartyName: string;
+  buyerName: string;
+  invoiceNumber: string;
+  amountDue: number;
+  dueDate: string;
+  daysUntilDue: number;
+  reminderNumber: number;
+  assetId: string;
+}
+
+interface BillToPartyPaymentOverdueEmailData {
+  billToPartyEmail: string;
+  billToPartyName: string;
+  buyerName: string;
+  invoiceNumber: string;
+  amountDue: number;
+  dueDate: string;
+  daysOverdue: number;
+  assetId: string;
+}
+
 class EmailService {
   private transporter: nodemailer.Transporter;
 
@@ -4646,6 +4682,811 @@ async sendAssetCancelledEmail(data: AssetCancelledEmailData): Promise<void> {
     text,
   });
 }
+
+async sendBillToPartyPaymentDueEmail(data: BillToPartyPaymentDueEmailData): Promise<void> {
+    const appName = process.env.APP_NAME || "Liqwik";
+    const appUrl = process.env.APP_URL || "http://localhost:3000";
+    const companyLocation = process.env.COMPANY_LOCATION || "Chennai, Tamil Nadu, India";
+
+    const subject = `${appName} - Payment Due: Invoice ${data.invoiceNumber}`;
+
+    const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Payment Due - ${appName}</title>
+      <style>
+        body {
+          font-family: 'Arial', 'Helvetica', sans-serif;
+          line-height: 1.6;
+          color: #2d2d2d;
+          max-width: 650px;
+          margin: 0 auto;
+          padding: 20px;
+          background-color: #f5f5f5;
+        }
+        .email-container {
+          background: white;
+          border-radius: 4px;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+          background: linear-gradient(135deg, #be185d, #9f1239);
+          color: white;
+          padding: 40px 30px;
+          text-align: center;
+          border-bottom: 4px solid #831843;
+        }
+        .header h1 {
+          margin: 0;
+          font-size: 32px;
+          font-weight: 700;
+          letter-spacing: 1px;
+        }
+        .header p {
+          margin: 15px 0 0 0;
+          font-size: 16px;
+          opacity: 0.95;
+          font-weight: 500;
+        }
+        .status-badge {
+          display: inline-block;
+          background: rgba(255, 255, 255, 0.25);
+          padding: 10px 24px;
+          border-radius: 4px;
+          margin-top: 20px;
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: 1.5px;
+          border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .content {
+          padding: 40px 35px;
+          background: #ffffff;
+        }
+        .greeting {
+          font-size: 16px;
+          margin-bottom: 25px;
+          color: #1a1a1a;
+          font-weight: 600;
+        }
+        .intro-text {
+          font-size: 16px;
+          color: #be185d;
+          font-weight: 600;
+          margin-bottom: 30px;
+          line-height: 1.5;
+        }
+        .payment-due-notice {
+          background: linear-gradient(135deg, #fef3c7, #fde68a);
+          border: 2px solid #f59e0b;
+          border-radius: 4px;
+          padding: 28px;
+          margin: 30px 0;
+          text-align: center;
+        }
+        .payment-due-title {
+          color: #92400e;
+          font-weight: 700;
+          font-size: 18px;
+          margin-bottom: 15px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .amount-due {
+          font-size: 36px;
+          font-weight: 700;
+          color: #b45309;
+          margin: 15px 0;
+          font-family: 'Georgia', serif;
+        }
+        .due-date {
+          font-size: 15px;
+          color: #92400e;
+          font-weight: 600;
+          margin-top: 10px;
+        }
+        .section-title {
+          color: #be185d;
+          font-weight: 700;
+          font-size: 16px;
+          margin: 30px 0 20px 0;
+          padding-bottom: 10px;
+          border-bottom: 2px solid #fbcfe8;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .details-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 20px 0;
+        }
+        .details-table td {
+          padding: 14px 0;
+          border-bottom: 1px solid #f3f4f6;
+        }
+        .details-table tr:last-child td {
+          border-bottom: none;
+        }
+        .details-table .label {
+          font-weight: 600;
+          color: #4b5563;
+          width: 50%;
+        }
+        .details-table .value {
+          color: #1f2937;
+          text-align: right;
+          font-weight: 500;
+        }
+        .highlight-row {
+          background: #fdf2f8;
+        }
+        .highlight-row td {
+          color: #be185d !important;
+          font-weight: 700 !important;
+          font-size: 17px !important;
+          padding: 16px 0 !important;
+        }
+        .info-box {
+          background: #f9fafb;
+          border: 1px solid #e5e7eb;
+          border-radius: 4px;
+          padding: 25px;
+          margin: 25px 0;
+        }
+        .info-box p {
+          margin: 0;
+          color: #4b5563;
+          font-size: 14px;
+          line-height: 1.8;
+        }
+        .info-box strong {
+          color: #1f2937;
+          display: block;
+          margin-bottom: 10px;
+        }
+        .cta-button {
+          display: inline-block;
+          background: linear-gradient(135deg, #be185d, #9f1239);
+          color: white;
+          padding: 16px 48px;
+          text-decoration: none;
+          border-radius: 4px;
+          font-weight: 600;
+          margin: 25px 0;
+          box-shadow: 0 4px 6px rgba(190, 24, 93, 0.3);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          font-size: 14px;
+        }
+        .cta-button:hover {
+          background: linear-gradient(135deg, #9f1239, #831843);
+        }
+        .footer {
+          background: linear-gradient(135deg, #831843, #500724);
+          color: #fce7f3;
+          padding: 35px 30px;
+          text-align: center;
+        }
+        .footer-content {
+          font-size: 14px;
+          line-height: 1.8;
+        }
+        .footer-title {
+          font-weight: 700;
+          font-size: 16px;
+          color: #ffffff;
+          margin-bottom: 15px;
+        }
+        .company-info {
+          margin-top: 20px;
+          padding-top: 20px;
+          border-top: 1px solid #be185d;
+          color: #fbcfe8;
+          line-height: 2;
+        }
+        .footer-disclaimer {
+          margin-top: 25px;
+          font-size: 12px;
+          color: #fbcfe8;
+          line-height: 1.6;
+        }
+        @media (max-width: 600px) {
+          .content, .header, .footer {
+            padding: 25px 20px;
+          }
+          .amount-due {
+            font-size: 28px;
+          }
+          .cta-button {
+            padding: 14px 32px;
+            font-size: 13px;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="email-container">
+        <div class="header">
+          <h1>${appName}</h1>
+          <p>Payment Due Notification</p>
+          <div class="status-badge">
+            ACTION REQUIRED
+          </div>
+        </div>
+        
+        <div class="content">
+          <div class="greeting">
+            Dear ${data.billToPartyName},
+          </div>
+          
+          <p class="intro-text">
+            This is a notification that payment is due for invoice ${data.invoiceNumber}. The buyer ${data.buyerName} has completed their payment, and now the amount is due from you.
+          </p>
+          
+          <div class="payment-due-notice">
+            <div class="payment-due-title">
+              Payment Due
+            </div>
+            <div class="amount-due">€${data.amountDue.toFixed(2)}</div>
+            <div class="due-date">
+              Due Date: ${new Date(data.dueDate).toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric"
+              })}
+            </div>
+          </div>
+          
+          <div class="section-title">Transaction Details</div>
+          
+          <table class="details-table">
+            <tr>
+              <td class="label">Invoice Number:</td>
+              <td class="value">${data.invoiceNumber}</td>
+            </tr>
+            <tr>
+              <td class="label">Buyer Name:</td>
+              <td class="value">${data.buyerName}</td>
+            </tr>
+            <tr>
+              <td class="label">Invoice Date:</td>
+              <td class="value">${new Date(data.invoiceDate).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric"
+              })}</td>
+            </tr>
+            <tr>
+              <td class="label">Original Payment Date:</td>
+              <td class="value">${new Date(data.originalPaymentDate).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric"
+              })}</td>
+            </tr>
+            <tr class="highlight-row">
+              <td class="label">Amount Due:</td>
+              <td class="value">€${data.amountDue.toFixed(2)}</td>
+            </tr>
+          </table>
+          
+          <div class="info-box">
+            <strong>Payment Instructions:</strong>
+            <p>
+              Please arrange for the payment of €${data.amountDue.toFixed(2)} to ${data.buyerName} by ${new Date(data.dueDate).toLocaleDateString()}. 
+              This payment fulfills your obligation for invoice ${data.invoiceNumber}.
+            </p>
+          </div>
+          
+          <div style="text-align: center;">
+            <a href="${appUrl}/dashboard" class="cta-button">
+              View Payment Details
+            </a>
+          </div>
+          
+          <p style="color: #6b7280; margin-top: 35px; line-height: 1.6;">
+            If you have any questions or need assistance with this payment, please contact our customer support team.
+          </p>
+          
+          <p style="color: #4b5563; margin-top: 30px; line-height: 1.6;">
+            Best regards,<br>
+            <strong>The ${appName} Team</strong>
+          </p>
+        </div>
+        
+        <div class="footer">
+          <div class="footer-content">
+            <div class="footer-title">
+              ${appName}
+            </div>
+            <div>
+              Secure Financial Transaction Platform
+            </div>
+            <div class="company-info">
+              Location: ${companyLocation}<br>
+              Email: support@liqwik.com<br>
+              Website: ${appUrl}
+            </div>
+            <div class="footer-disclaimer">
+              Copyright 2024 ${appName}. All rights reserved.<br>
+              This is an automated notification. Please do not reply to this email.<br>
+              For support inquiries, please contact support@liqwik.com
+            </div>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+    const text = `
+    ${appName} - PAYMENT DUE NOTIFICATION
+    
+    Dear ${data.billToPartyName},
+    
+    This is a notification that payment is due for invoice ${data.invoiceNumber}.
+    
+    PAYMENT DUE: €${data.amountDue.toFixed(2)}
+    Due Date: ${new Date(data.dueDate).toLocaleDateString()}
+    
+    TRANSACTION DETAILS:
+    - Invoice Number: ${data.invoiceNumber}
+    - Buyer Name: ${data.buyerName}
+    - Invoice Date: ${new Date(data.invoiceDate).toLocaleDateString()}
+    - Original Payment Date: ${new Date(data.originalPaymentDate).toLocaleDateString()}
+    - Amount Due: €${data.amountDue.toFixed(2)}
+    
+    PAYMENT INSTRUCTIONS:
+    Please arrange for the payment of €${data.amountDue.toFixed(2)} to ${data.buyerName} by ${new Date(data.dueDate).toLocaleDateString()}.
+    
+    For assistance, contact our support team at support@liqwik.com
+    
+    Best regards,
+    The ${appName} Team
+    
+    ---
+    ${appName} | ${companyLocation}
+    This is an automated notification. Please do not reply to this email.
+  `;
+
+    await this.sendEmail({ to: data.billToPartyEmail, subject, html, text });
+  }
+
+  async sendBillToPartyPaymentReminderEmail(data: BillToPartyPaymentReminderEmailData): Promise<void> {
+    const appName = process.env.APP_NAME || "Liqwik";
+    const appUrl = process.env.APP_URL || "http://localhost:3000";
+    const companyLocation = process.env.COMPANY_LOCATION || "Chennai, Tamil Nadu, India";
+
+    const subject = `${appName} - Payment Reminder #${data.reminderNumber}: Invoice ${data.invoiceNumber}`;
+
+    const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Payment Reminder - ${appName}</title>
+      <style>
+        body {
+          font-family: 'Arial', 'Helvetica', sans-serif;
+          line-height: 1.6;
+          color: #2d2d2d;
+          max-width: 650px;
+          margin: 0 auto;
+          padding: 20px;
+          background-color: #f5f5f5;
+        }
+        .email-container {
+          background: white;
+          border-radius: 4px;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+          background: linear-gradient(135deg, #f59e0b, #d97706);
+          color: white;
+          padding: 40px 30px;
+          text-align: center;
+          border-bottom: 4px solid #b45309;
+        }
+        .header h1 {
+          margin: 0;
+          font-size: 32px;
+          font-weight: 700;
+          letter-spacing: 1px;
+        }
+        .header p {
+          margin: 15px 0 0 0;
+          font-size: 16px;
+          opacity: 0.95;
+          font-weight: 500;
+        }
+        .status-badge {
+          display: inline-block;
+          background: rgba(255, 255, 255, 0.25);
+          padding: 10px 24px;
+          border-radius: 4px;
+          margin-top: 20px;
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: 1.5px;
+          border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .content {
+          padding: 40px 35px;
+          background: #ffffff;
+        }
+        .greeting {
+          font-size: 16px;
+          margin-bottom: 25px;
+          color: #1a1a1a;
+          font-weight: 600;
+        }
+        .urgent-notice {
+          background: linear-gradient(135deg, #fef3c7, #fde68a);
+          border: 2px solid #f59e0b;
+          border-radius: 4px;
+          padding: 28px;
+          margin: 30px 0;
+          text-align: center;
+        }
+        .urgent-title {
+          color: #92400e;
+          font-weight: 700;
+          font-size: 18px;
+          margin-bottom: 15px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .days-remaining {
+          font-size: 36px;
+          font-weight: 700;
+          color: #b45309;
+          margin: 15px 0;
+          font-family: 'Georgia', serif;
+        }
+        .amount {
+          font-size: 28px;
+          font-weight: 700;
+          color: #92400e;
+          margin: 10px 0;
+        }
+        .cta-button {
+          display: inline-block;
+          background: linear-gradient(135deg, #be185d, #9f1239);
+          color: white;
+          padding: 16px 48px;
+          text-decoration: none;
+          border-radius: 4px;
+          font-weight: 600;
+          margin: 25px 0;
+          box-shadow: 0 4px 6px rgba(190, 24, 93, 0.3);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          font-size: 14px;
+        }
+        .cta-button:hover {
+          background: linear-gradient(135deg, #9f1239, #831843);
+        }
+        .footer {
+          background: linear-gradient(135deg, #831843, #500724);
+          color: #fce7f3;
+          padding: 35px 30px;
+          text-align: center;
+        }
+        @media (max-width: 600px) {
+          .content, .header, .footer {
+            padding: 25px 20px;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="email-container">
+        <div class="header">
+          <h1>${appName}</h1>
+          <p>Payment Reminder #${data.reminderNumber}</p>
+          <div class="status-badge">
+            REMINDER
+          </div>
+        </div>
+        
+        <div class="content">
+          <div class="greeting">
+            Dear ${data.billToPartyName},
+          </div>
+          
+          <p style="font-size: 16px; color: #d97706; font-weight: 600; margin-bottom: 30px;">
+            This is reminder #${data.reminderNumber} for your upcoming payment due for invoice ${data.invoiceNumber}.
+          </p>
+          
+          <div class="urgent-notice">
+            <div class="urgent-title">
+              Payment Due In
+            </div>
+            <div class="days-remaining">${data.daysUntilDue} Days</div>
+            <div class="amount">€${data.amountDue.toFixed(2)}</div>
+            <div style="font-size: 15px; color: #92400e; font-weight: 600; margin-top: 10px;">
+              Due Date: ${new Date(data.dueDate).toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric"
+              })}
+            </div>
+          </div>
+          
+          <p style="color: #4b5563; font-size: 15px; line-height: 1.8;">
+            Please ensure that the payment of <strong>€${data.amountDue.toFixed(2)}</strong> is made to ${data.buyerName} 
+            by the due date to avoid any late payment charges or complications.
+          </p>
+          
+          <div style="text-align: center;">
+            <a href="${appUrl}/dashboard" class="cta-button">
+              Make Payment Now
+            </a>
+          </div>
+          
+          <p style="color: #4b5563; margin-top: 30px; line-height: 1.6;">
+            Best regards,<br>
+            <strong>The ${appName} Team</strong>
+          </p>
+        </div>
+        
+        <div class="footer">
+          <div style="font-size: 14px; line-height: 1.8;">
+            <div style="font-weight: 700; font-size: 16px; margin-bottom: 15px;">
+              ${appName}
+            </div>
+            <div>
+              Location: ${companyLocation}<br>
+              Email: support@liqwik.com
+            </div>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+    const text = `
+    ${appName} - PAYMENT REMINDER #${data.reminderNumber}
+    
+    Dear ${data.billToPartyName},
+    
+    This is reminder #${data.reminderNumber} for your upcoming payment.
+    
+    PAYMENT DUE IN: ${data.daysUntilDue} DAYS
+    Amount: €${data.amountDue.toFixed(2)}
+    Due Date: ${new Date(data.dueDate).toLocaleDateString()}
+    Invoice: ${data.invoiceNumber}
+    Buyer: ${data.buyerName}
+    
+    Please ensure payment is made by the due date.
+    
+    Best regards,
+    The ${appName} Team
+  `;
+
+    await this.sendEmail({ to: data.billToPartyEmail, subject, html, text });
+  }
+
+  async sendBillToPartyPaymentOverdueEmail(data: BillToPartyPaymentOverdueEmailData): Promise<void> {
+    const appName = process.env.APP_NAME || "Liqwik";
+    const appUrl = process.env.APP_URL || "http://localhost:3000";
+    const companyLocation = process.env.COMPANY_LOCATION || "Chennai, Tamil Nadu, India";
+
+    const subject = `${appName} - URGENT: Payment Overdue - Invoice ${data.invoiceNumber}`;
+
+    const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Payment Overdue - ${appName}</title>
+      <style>
+        body {
+          font-family: 'Arial', 'Helvetica', sans-serif;
+          line-height: 1.6;
+          color: #2d2d2d;
+          max-width: 650px;
+          margin: 0 auto;
+          padding: 20px;
+          background-color: #f5f5f5;
+        }
+        .email-container {
+          background: white;
+          border-radius: 4px;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+          background: linear-gradient(135deg, #dc2626, #b91c1c);
+          color: white;
+          padding: 40px 30px;
+          text-align: center;
+          border-bottom: 4px solid #991b1b;
+        }
+        .header h1 {
+          margin: 0;
+          font-size: 32px;
+          font-weight: 700;
+          letter-spacing: 1px;
+        }
+        .header p {
+          margin: 15px 0 0 0;
+          font-size: 16px;
+          opacity: 0.95;
+          font-weight: 500;
+        }
+        .status-badge {
+          display: inline-block;
+          background: rgba(255, 255, 255, 0.25);
+          padding: 10px 24px;
+          border-radius: 4px;
+          margin-top: 20px;
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: 1.5px;
+          border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .content {
+          padding: 40px 35px;
+          background: #ffffff;
+        }
+        .overdue-notice {
+          background: linear-gradient(135deg, #fee2e2, #fecaca);
+          border: 3px solid #dc2626;
+          border-radius: 4px;
+          padding: 28px;
+          margin: 30px 0;
+          text-align: center;
+        }
+        .overdue-title {
+          color: #991b1b;
+          font-weight: 700;
+          font-size: 20px;
+          margin-bottom: 15px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .days-overdue {
+          font-size: 40px;
+          font-weight: 700;
+          color: #dc2626;
+          margin: 15px 0;
+          font-family: 'Georgia', serif;
+        }
+        .amount-overdue {
+          font-size: 32px;
+          font-weight: 700;
+          color: #991b1b;
+          margin: 10px 0;
+        }
+        .cta-button {
+          display: inline-block;
+          background: linear-gradient(135deg, #dc2626, #b91c1c);
+          color: white;
+          padding: 18px 52px;
+          text-decoration: none;
+          border-radius: 4px;
+          font-weight: 600;
+          margin: 25px 0;
+          box-shadow: 0 4px 6px rgba(220, 38, 38, 0.4);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          font-size: 15px;
+        }
+        .cta-button:hover {
+          background: linear-gradient(135deg, #b91c1c, #991b1b);
+        }
+        .footer {
+          background: linear-gradient(135deg, #831843, #500724);
+          color: #fce7f3;
+          padding: 35px 30px;
+          text-align: center;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="email-container">
+        <div class="header">
+          <h1>${appName}</h1>
+          <p>Payment Overdue Notice</p>
+          <div class="status-badge">
+            URGENT - OVERDUE
+          </div>
+        </div>
+        
+        <div class="content">
+          <div style="font-size: 16px; margin-bottom: 25px; color: #1a1a1a; font-weight: 600;">
+            Dear ${data.billToPartyName},
+          </div>
+          
+          <p style="font-size: 16px; color: #dc2626; font-weight: 700; margin-bottom: 30px;">
+            URGENT: Your payment for invoice ${data.invoiceNumber} is now OVERDUE.
+          </p>
+          
+          <div class="overdue-notice">
+            <div class="overdue-title">
+              PAYMENT OVERDUE
+            </div>
+            <div class="days-overdue">${data.daysOverdue} Days</div>
+            <div class="amount-overdue">€${data.amountDue.toFixed(2)}</div>
+            <div style="font-size: 15px; color: #991b1b; font-weight: 600; margin-top: 10px;">
+              Due Date: ${new Date(data.dueDate).toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric"
+              })}
+            </div>
+          </div>
+          
+          <p style="color: #991b1b; font-size: 16px; line-height: 1.8; font-weight: 600;">
+            IMMEDIATE ACTION REQUIRED: Your payment of €${data.amountDue.toFixed(2)} to ${data.buyerName} 
+            is now ${data.daysOverdue} days overdue. Please make this payment immediately to avoid further complications.
+          </p>
+          
+          <div style="text-align: center;">
+            <a href="${appUrl}/dashboard" class="cta-button">
+              Make Payment Immediately
+            </a>
+          </div>
+          
+          <p style="color: #4b5563; margin-top: 30px; line-height: 1.6;">
+            If you have already made this payment, please contact our support team immediately.<br><br>
+            Best regards,<br>
+            <strong>The ${appName} Team</strong>
+          </p>
+        </div>
+        
+        <div class="footer">
+          <div style="font-size: 14px; line-height: 1.8;">
+            <div style="font-weight: 700; font-size: 16px; margin-bottom: 15px;">
+              ${appName}
+            </div>
+            <div>
+              Location: ${companyLocation}<br>
+              Email: support@liqwik.com
+            </div>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+    const text = `
+    ${appName} - URGENT: PAYMENT OVERDUE
+    
+    Dear ${data.billToPartyName},
+    
+    URGENT: Your payment for invoice ${data.invoiceNumber} is now OVERDUE.
+    
+    PAYMENT OVERDUE: ${data.daysOverdue} DAYS
+    Amount: €${data.amountDue.toFixed(2)}
+    Due Date: ${new Date(data.dueDate).toLocaleDateString()}
+    Invoice: ${data.invoiceNumber}
+    Buyer: ${data.buyerName}
+    
+    IMMEDIATE ACTION REQUIRED
+    Please make this payment immediately to avoid further complications.
+    
+    If you have already made this payment, please contact support@liqwik.com immediately.
+    
+    Best regards,
+    The ${appName} Team
+  `;
+
+    await this.sendEmail({ to: data.billToPartyEmail, subject, html, text });
+  }
 }
 
 export const emailService = new EmailService();

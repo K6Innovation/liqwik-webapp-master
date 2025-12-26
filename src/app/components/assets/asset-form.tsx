@@ -191,110 +191,60 @@ export default function AssetForm({ asset, postSaveAction, onWalletUpdate }: Pro
 
   // Save asset function
   const saveAsset = async () => {
-  if (!formRef.current) return null;
-  
-  setIsLoading(true);
-  try {
-    const formData = new FormData(formRef.current);
+    if (!formRef.current) return null;
     
-    if (asset.id) {
-      formData.append("id", asset.id.toString());
+    setIsLoading(true);
+    try {
+      const formData = new FormData(formRef.current);
+      
+      if (asset.id) {
+        formData.append("id", asset.id.toString());
+      }
+      
+      formData.append("apy", calculatedAPY.toString());
+      formData.append("fees", calculatedFees.toString());
+      
+      const url = !asset.id
+        ? `/api/sellers/${session?.data?.user?.id}/assets`
+        : `/api/sellers/${session?.data?.user?.id}/assets/${asset.id}`;
+      
+      const response = await fetch(url, {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const { error } = await response.json();
+        throw new Error(
+          error || "Failed to submit the data. Please try again."
+        );
+      }
+      
+      const data = await response.json();
+      setSavedAssetData(data);
+      
+      setSaveStatus({
+        status: "success",
+        message: "Asset saved successfully",
+      });
+      
+      // Trigger wallet update after successful save
+      if (onWalletUpdate) {
+        onWalletUpdate();
+      }
+      
+      return data;
+    } catch (error: any) {
+      setSaveStatus({
+        status: "error",
+        message: error.message || "Failed to save the asset",
+      });
+      console.log(error);
+      return null;
+    } finally {
+      setIsLoading(false);
     }
-    
-    formData.append("apy", calculatedAPY.toString());
-    formData.append("fees", calculatedFees.toString());
-    
-    const url = !asset.id
-      ? `/api/sellers/${session?.data?.user?.id}/assets`
-      : `/api/sellers/${session?.data?.user?.id}/assets/${asset.id}`;
-    
-    const response = await fetch(url, {
-      method: "POST",
-      body: formData,
-    });
-    
-    if (!response.ok) {
-      const { error } = await response.json();
-      throw new Error(
-        error || "Failed to submit the data. Please try again."
-      );
-    }
-    
-    const data = await response.json();
-    setSavedAssetData(data);
-    
-    setSaveStatus({
-      status: "success",
-      message: "Asset saved successfully",
-    });
-    
-    // Trigger wallet update after successful save
-    if (onWalletUpdate) {
-      onWalletUpdate();
-    }
-    
-    return data;
-  } catch (error: any) {
-    setSaveStatus({
-      status: "error",
-      message: error.message || "Failed to save the asset",
-    });
-    console.log(error);
-    return null;
-  } finally {
-    setIsLoading(false);
-  }
-};
-  // const saveAsset = async () => {
-  //   if (!formRef.current) return null;
-    
-  //   setIsLoading(true);
-  //   try {
-  //     const formData = new FormData(formRef.current);
-      
-  //     if (asset.id) {
-  //       formData.append("id", asset.id.toString());
-  //     }
-      
-  //     formData.append("apy", calculatedAPY.toString());
-  //     formData.append("fees", calculatedFees.toString());
-      
-  //     const url = !asset.id
-  //       ? `/api/sellers/${session?.data?.user?.id}/assets`
-  //       : `/api/sellers/${session?.data?.user?.id}/assets/${asset.id}`;
-      
-  //     const response = await fetch(url, {
-  //       method: "POST",
-  //       body: formData,
-  //     });
-      
-  //     if (!response.ok) {
-  //       const { error } = await response.json();
-  //       throw new Error(
-  //         error || "Failed to submit the data. Please try again."
-  //       );
-  //     }
-      
-  //     const data = await response.json();
-  //     setSavedAssetData(data);
-      
-  //     setSaveStatus({
-  //       status: "success",
-  //       message: "Asset saved successfully",
-  //     });
-      
-  //     return data;
-  //   } catch (error: any) {
-  //     setSaveStatus({
-  //       status: "error",
-  //       message: error.message || "Failed to save the asset",
-  //     });
-  //     console.log(error);
-  //     return null;
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
+  };
 
   // Confirm bank transfer and approve fee
   const handleConfirmBankTransfer = async () => {
@@ -541,12 +491,27 @@ export default function AssetForm({ asset, postSaveAction, onWalletUpdate }: Pro
     }, 3000);
   };
 
+  // Updated useEffect to fetch only user's bill-to parties
   useEffect(() => {
     (async () => {
-      const response = await fetch(`/api/bill-to-parties`).then((res) =>
-        res.json()
-      );
-      setBillToParties(response);
+      if (!session?.data?.user?.id) return;
+      
+      try {
+        const response = await fetch(
+          `/api/bill-to-parties?userId=${session.data.user.id}`
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          setBillToParties(data);
+        } else {
+          console.error('Failed to fetch bill-to parties');
+          setBillToParties([]);
+        }
+      } catch (error) {
+        console.error('Error fetching bill-to parties:', error);
+        setBillToParties([]);
+      }
     })();
   }, [session]);
 
@@ -624,6 +589,11 @@ export default function AssetForm({ asset, postSaveAction, onWalletUpdate }: Pro
                 </option>
               ))}
             </select>
+            {billToParties.length === 0 && (
+              <span className="text-xs text-gray-500 mt-1">
+                No bill-to parties found. Please create one first.
+              </span>
+            )}
           </label>
         </div>
         
@@ -871,159 +841,158 @@ export default function AssetForm({ asset, postSaveAction, onWalletUpdate }: Pro
                         >
                           {assetCopy.termMonths || 0}
                         </div>
-                        
                         <div 
-                          className="absolute font-bold text-2xl"
-                          style={{ 
-                            top: '48%',
-                            left: '58%',
-                            transform: 'translateY(-50%)',
-                            color: tokenColor === 'gold' ? '#D4AF37' : tokenColor === 'copper' ? '#B87333' : '#C0C0C0'
-                          }}
-                        >
-                          {faceValueFirstTwo}
-                        </div>
-                        
-                        <div 
-                          className="absolute font-bold text-xl"
-                          style={{ 
-                            bottom: '18%',
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            color: tokenColor === 'gold' ? '#D4AF37' : tokenColor === 'copper' ? '#B87333' : '#C0C0C0'
-                          }}
-                        >
-                          {calculatedAPY.toFixed(0)}
-                        </div>
-                      </div>
+                      className="absolute font-bold text-2xl"
+                      style={{ 
+                        top: '48%',
+                        left: '58%',
+                        transform: 'translateY(-50%)',
+                        color: tokenColor === 'gold' ? '#D4AF37' : tokenColor === 'copper' ? '#B87333' : '#C0C0C0'
+                      }}
+                    >
+                      {faceValueFirstTwo}
+                    </div>
+                    
+                    <div 
+                      className="absolute font-bold text-xl"
+                      style={{ 
+                        bottom: '18%',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        color: tokenColor === 'gold' ? '#D4AF37' : tokenColor === 'copper' ? '#B87333' : '#C0C0C0'
+                      }}
+                    >
+                      {calculatedAPY.toFixed(0)}
                     </div>
                   </div>
-                )}
-              </div>
-
-              {checkingValidation && (
-                <div className="flex items-center justify-center space-x-2 text-blue-700">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-700" />
-                  <span className="text-sm">Waiting for Bill-To Party validation...</span>
                 </div>
-              )}
-
-              <div className="flex justify-end gap-3">
-                {!feeApprovedLocally && showValidateBtn ? (
-                  <button
-                    type="button"
-                    className={`py-2 px-4 rounded-lg shadow-md text-white transition 
-                      ${highlightValidate ? "bg-pink-500 animate-pulse" : "bg-pink-700 hover:bg-pink-800"}
-                    `}
-                    onClick={() => setShowFeePopup(true)}
-                  >
-                    Pay Liqwik Fee
-                  </button>
-                ) : feeApprovedLocally && !validationEmailSent ? (
-                  <button
-                    type="button"
-                    className="py-2 px-4 rounded-lg shadow-md text-white bg-pink-700 hover:bg-pink-800 transition"
-                    onClick={handleValidateClick}
-                  >
-                    Validate
-                  </button>
-                ) : tokenValidated ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleCancelToken}
-                      disabled={isCancelling}
-                      className="py-2 px-4 rounded-lg shadow-md text-white bg-gray-500 hover:bg-gray-600 transition disabled:opacity-50"
-                    >
-                      {isCancelling ? "Cancelling..." : "Cancel"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handlePostToken}
-                      disabled={isPosting}
-                      className="py-2 px-4 rounded-lg shadow-md text-white bg-pink-500 hover:bg-pink-600 transition disabled:opacity-50"
-                    >
-                      {isPosting ? "Posting..." : "Post Token"}
-                    </button>
-                  </>
-                ) : null}
               </div>
+            )}
+          </div>
+
+          {checkingValidation && (
+            <div className="flex items-center justify-center space-x-2 text-blue-700">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-700" />
+              <span className="text-sm">Waiting for Bill-To Party validation...</span>
             </div>
           )}
 
-          <div className="flex flex-col gap-4 mb-4 mt-5 items-center">
-            {!showTokenInfo && (
+          <div className="flex justify-end gap-3">
+            {!feeApprovedLocally && showValidateBtn ? (
               <button
                 type="button"
-                onClick={handleCreateToken}
-                className="w-40 bg-pink-700 text-white py-2 px-4 rounded-[6px] shadow-md hover:bg-pink-800 transition"
+                className={`py-2 px-4 rounded-lg shadow-md text-white transition 
+                  ${highlightValidate ? "bg-pink-500 animate-pulse" : "bg-pink-700 hover:bg-pink-800"}
+                `}
+                onClick={() => setShowFeePopup(true)}
               >
-                Create Token
+                Pay Liqwik Fee
               </button>
-            )}
-          </div>
-        </div>
-      </form>
-
-      {showFeePopup && (
-        <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 z-[9999]">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96 text-center">
-            <h2 className="text-lg font-semibold mb-4">Approve 1% Fee</h2>
-            <p className="text-gray-700">Do you approve a 1% fee €{calculatedFees.toFixed(0)}?</p>
-            <div className="flex justify-center mt-4 gap-4">
+            ) : feeApprovedLocally && !validationEmailSent ? (
               <button
-                onClick={() => {
-                  setShowFeePopup(false);
-                  setShowConfirmTransferPopup(true);
-                }}
-                className="px-4 py-2 bg-pink-700 text-white rounded-lg hover:bg-pink-800 transition"
+                type="button"
+                className="py-2 px-4 rounded-lg shadow-md text-white bg-pink-700 hover:bg-pink-800 transition"
+                onClick={handleValidateClick}
               >
-                Yes
+                Validate
               </button>
-              <button
-                onClick={() => setShowFeePopup(false)}
-                className="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition"
-              >
-                No
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showConfirmTransferPopup && (
-        <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 z-[9999]">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96 text-center">
-            <h2 className="text-lg font-semibold mb-4">Confirm Bank Transfer</h2>
-            <p className="text-gray-700">Confirm bank transfer of €{calculatedFees.toFixed(0)} to Liqwik for the token post.</p>
-            <div className="flex justify-center mt-4 gap-4">
-              <button
-                onClick={handleConfirmBankTransfer}
-                className="px-4 py-2 bg-pink-700 text-white rounded-lg hover:bg-pink-800 transition"
-              >
-                Yes
-              </button>
-              <button
-                onClick={() => setShowConfirmTransferPopup(false)}
-                className="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition"
-              >
-                No
-              </button>
-            </div>
+            ) : tokenValidated ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCancelToken}
+                  disabled={isCancelling}
+                  className="py-2 px-4 rounded-lg shadow-md text-white bg-gray-500 hover:bg-gray-600 transition disabled:opacity-50"
+                >
+                  {isCancelling ? "Cancelling..." : "Cancel"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePostToken}
+                  disabled={isPosting}
+                  className="py-2 px-4 rounded-lg shadow-md text-white bg-pink-500 hover:bg-pink-600 transition disabled:opacity-50"
+                >
+                  {isPosting ? "Posting..." : "Post Token"}
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       )}
 
-      {isLoading && (
-        <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 z-[9999]">
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="flex items-center space-x-3">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-700" />
-              <span>Processing...</span>
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="flex flex-col gap-4 mb-4 mt-5 items-center">
+        {!showTokenInfo && (
+          <button
+            type="button"
+            onClick={handleCreateToken}
+            className="w-40 bg-pink-700 text-white py-2 px-4 rounded-[6px] shadow-md hover:bg-pink-800 transition"
+          >
+            Create Token
+          </button>
+        )}
+      </div>
     </div>
-  );
+  </form>
+
+  {showFeePopup && (
+    <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 z-[9999]">
+      <div className="bg-white p-6 rounded-lg shadow-lg w-96 text-center">
+        <h2 className="text-lg font-semibold mb-4">Approve 1% Fee</h2>
+        <p className="text-gray-700">Do you approve a 1% fee €{calculatedFees.toFixed(0)}?</p>
+        <div className="flex justify-center mt-4 gap-4">
+          <button
+            onClick={() => {
+              setShowFeePopup(false);
+              setShowConfirmTransferPopup(true);
+            }}
+            className="px-4 py-2 bg-pink-700 text-white rounded-lg hover:bg-pink-800 transition"
+          >
+            Yes
+          </button>
+          <button
+            onClick={() => setShowFeePopup(false)}
+            className="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition"
+          >
+            No
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {showConfirmTransferPopup && (
+    <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 z-[9999]">
+      <div className="bg-white p-6 rounded-lg shadow-lg w-96 text-center">
+        <h2 className="text-lg font-semibold mb-4">Confirm Bank Transfer</h2>
+        <p className="text-gray-700">Confirm bank transfer of €{calculatedFees.toFixed(0)} to Liqwik for the token post.</p>
+        <div className="flex justify-center mt-4 gap-4">
+          <button
+            onClick={handleConfirmBankTransfer}
+            className="px-4 py-2 bg-pink-700 text-white rounded-lg hover:bg-pink-800 transition"
+          >
+            Yes
+          </button>
+          <button
+            onClick={() => setShowConfirmTransferPopup(false)}
+            className="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition"
+          >
+            No
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {isLoading && (
+    <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50 z-[9999]">
+      <div className="bg-white p-6 rounded-lg shadow-lg">
+        <div className="flex items-center space-x-3">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-700" />
+          <span>Processing...</span>
+        </div>
+      </div>
+    </div>
+  )}
+</div>
+);
 }
